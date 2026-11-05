@@ -1015,17 +1015,31 @@ func player_home(cx: float, cz: float) -> void:
 
 ## Pasaj girişi: iki taş ayak, kemer, karanlık iç, tabela. side: -1 batı cephesi (+x'e bakar), +1 doğu
 func pasaj(name: String, x: float, z: float, side: float) -> void:
+	# cepheye gömülü, iki katlı süslü giriş: taş çerçeve, kemer, ışıklı iç koridor, cam saçak
+	var c := stone(C("#e8dcc4"))
 	var ry := PI / 2.0
-	var c := stone(C("#e2d6c0"))
+	var fx := x - side * 1.1
 	for e: float in [-1.0, 1.0]:
-		g.box(0.9, 6.0, 0.9, x, 0, z + e * 2.6, c)
-	g.box(0.9, 1.4, 6.1, x, 6.0, z, c)
-	g.put("cyl", Vector3(x, 6.0, z), c, 0, Vector3(2.2, 0.85, 2.2), "plain", PI / 2.0)
-	g.box(0.2, 5.8, 4.4, x + side * 0.35, 0, z, C("#2a2422"))
-	g.box(0.25, 0.9, 4.6, x - side * 0.5, 7.5, z, C("#1f3a5a"))
-	label(name, Vector3(x - side * 0.9, 8.6, z), 46, C("#f6e7b8"), C("#1f3a5a"), 8, true)
-	for k in 3:
-		g.box(0.4, 0.06, 0.4, x - side * 0.6, 6.6, z - 1.6 + k * 1.6, C("#fff1c8"))
+		g.box(0.7, 7.2, 0.8, fx, 0, z + e * 2.8, c)
+		g.box(0.8, 0.3, 0.9, fx, 7.2, z + e * 2.8, C("#cbbd9f"))
+	g.box(0.7, 1.6, 6.4, fx, 7.5, z, c)
+	g.put("cyl", Vector3(fx, 5.6, z), c, 0, Vector3(4.8, 0.7, 4.8), "plain", PI / 2.0)
+	# cepheye yaslanan ışıklı giriş: sıcak renkli iç, yan duvarlar, cam tavan
+	g.box(0.08, 5.4, 4.6, x - side * 0.08, 0, z, C("#f2c878"))
+	g.box(0.06, 3.2, 2.0, x - side * 0.14, 0, z, C("#6b4a2a"))
+	g.box(1.1, 0.03, 4.6, x - side * 0.6, 0.01, z, C("#d8b88a"))
+	for e2: float in [-1.0, 1.0]:
+		g.box(1.1, 5.4, 0.12, x - side * 0.6, 0, z + e2 * 2.3, C("#e6cfa0"))
+	g.box(1.2, 0.1, 4.7, x - side * 0.6, 5.4, z, C("#bfe3f5"))
+	# cam saçak
+	g.box(1.4, 0.08, 6.0, fx - side * 0.7, 4.6, z, C("#9cc7d8"))
+	g.box(0.06, 0.06, 6.0, fx - side * 1.35, 4.55, z, C("#2c2b2a"))
+	# tabela
+	g.box(0.2, 1.0, 5.2, fx - side * 0.42, 6.4, z, C("#1f3a5a"))
+	label(name, Vector3(fx - side * 0.6, 6.45, z), 52, C("#f6e7b8"), C("#1f3a5a"), 8, true)
+	# kapı önü fenerleri
+	for e3: float in [-1.0, 1.0]:
+		g.put("ball", Vector3(fx - side * 0.5, 4.0, z + e3 * 3.4), C("#fff1c8"), 0, Vector3(0.35, 0.35, 0.35))
 
 func bunting(x0: float, x1: float, z: float, y: float) -> void:
 	g.box(x1 - x0, 0.03, 0.03, (x0 + x1) / 2.0, y, z, C("#3a3633"))
@@ -1053,19 +1067,31 @@ func build_taksim(ax: float, z_top: float) -> void:
 	area("Taksim Meydanı", 122, 238, tz0 + 6, z_top)
 	squares.append([122, 238, tz0 + 6, z_top])
 	road("Taksim Meydanı", 122, 238, tz0 + 6, z_top)
-	# Cumhuriyet Anıtı (sadeleştirilmiş): basamaklar, taş gövde, kemer, figürler
+	# Cumhuriyet Anıtı (sadeleştirilmiş): yuvarlak basamaklar, çift kemerli taş gövde, iki yüzde figür grupları
 	var mx := ax; var mz := -470.0
 	for k in 3:
-		g.box(14.0 - k * 2.0, 0.35, 14.0 - k * 2.0, mx, k * 0.35, mz, C("#d6cfc2"))
-	g.wall_box(6.0, 7.0, 6.0, mx, 1.05, mz, stone(C("#cfc5b2")), 0, "door", 6.0, 7.0, true)
+		g.put("cyl", Vector3(mx, k * 0.35 + 0.175, mz), C("#d6cfc2"), 0, Vector3(16.0 - k * 2.5, 0.35, 16.0 - k * 2.5))
+	g.put("cyl", Vector3(mx, 1.2, mz), C("#5f8f45"), 0, Vector3(10.0, 0.1, 10.0))
+	for k in 12:
+		var fa := k * TAU / 12.0
+		g.put("ico", Vector3(mx + cos(fa) * 4.4, 1.35, mz + sin(fa) * 4.4), pick(["#e0483a", "#f2efe9", "#e0483a"]), fa, Vector3(0.6, 0.4, 0.6))
+	var sc := stone(C("#cfc5b2"))
+	g.box(7.0, 3.0, 5.0, mx, 1.05, mz, sc)
 	for e: float in [-1.0, 1.0]:
-		g.box(1.0, 10.0, 1.0, mx + e * 3.6, 1.05, mz, stone(C("#c9bea9")))
-	g.box(8.2, 1.2, 1.2, mx, 11.05, mz, stone(C("#c9bea9")))
-	for k in 3:
-		var fx := mx - 1.6 + k * 1.6
-		g.put("cyl8", Vector3(fx, 8.9, mz), C("#4f6b55"), 0, Vector3(0.35, 1.7, 0.35))
-		g.put("ball", Vector3(fx, 9.95, mz), C("#4f6b55"), 0, Vector3(0.3, 0.3, 0.3))
-	add_col(mx - 7, mx + 7, mz - 7, mz + 7)
+		g.box(1.4, 9.0, 1.4, mx + e * 3.2, 4.05, mz, sc)
+		g.box(1.7, 0.4, 1.7, mx + e * 3.2, 13.05, mz, C("#bfb39c"))
+	g.box(8.2, 1.4, 1.6, mx, 13.4, mz, sc)
+	g.put("cyl", Vector3(mx, 11.6, mz), sc, 0, Vector3(5.0, 1.6, 5.0), "plain", 0.0, PI / 2.0)
+	# figür grupları (iki yüz)
+	for fz: float in [-1.0, 1.0]:
+		for k in 5:
+			var fx2 := mx - 2.4 + k * 1.2
+			var hh := 2.2 + (0.6 if k == 2 else 0.0)
+			g.put("cyl8", Vector3(fx2, 4.05 + hh / 2.0, mz + fz * 1.3), C("#4f6b55"), 0, Vector3(0.4, hh, 0.35))
+			g.put("ball", Vector3(fx2, 4.25 + hh, mz + fz * 1.3), C("#4f6b55"), 0, Vector3(0.32, 0.32, 0.32))
+	g.put("cyl8", Vector3(mx, 15.2, mz), C("#4f6b55"), 0, Vector3(0.12, 2.4, 0.12))
+	g.box(1.4, 0.9, 0.05, mx + 0.7, 15.6, mz, C("#d9302a"))
+	add_col(mx - 8, mx + 8, mz - 8, mz + 8)
 	# Gezi Parkı (batı) ve çevre binalar
 	g.ground(122, 160, tz0 + 6, z_top - 18, 0.03, "grass", 5.0)
 	parks.append([122, 160, tz0 + 6, z_top - 18])

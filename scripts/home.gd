@@ -128,3 +128,38 @@ func build(origin: Vector3) -> void:
 	var l := OmniLight3D.new(); l.position = Vector3(0, 3.0, 0); l.omni_range = 11.0; l.light_energy = 0.7; l.light_color = Color("#ffe8c8"); add_child(l)
 	var lb := Label3D.new(); lb.text = "Evin"; lb.font_size = 64; lb.pixel_size = 0.006; lb.position = Vector3(W / 2 - 0.1, 2.9, 0); lb.rotation.y = -PI / 2.0
 	lb.modulate = Color("#7a3a22"); add_child(lb)
+
+## Puanla alınan ev süsleri: her biri evde sabit bir yere konur
+const DECOR := {
+	"bitki": {"name": "Bitki köşesi", "price": 150},
+	"kitaplik": {"name": "Büyük kitaplık", "price": 200},
+	"tablo": {"name": "Manzara tablosu", "price": 100},
+	"hali": {"name": "Yatak odası halısı", "price": 150},
+	"minder": {"name": "Dostuna yastıklar", "price": 200},
+	"okuma": {"name": "Okuma köşesi", "price": 300},
+}
+var placed := {}
+
+func add_decor(id: String) -> void:
+	if placed.has(id):
+		return
+	placed[id] = true
+	match id:
+		"bitki":
+			_prop("cactus_medium_B", Vector3(5.4, 0, -2.6), 0.0)
+			_prop("cactus_small_A", Vector3(5.5, 0, -1.9), 0.0, 1.0, false)
+			_prop("cactus_small_B", Vector3(-5.4, 0, 4.2), 0.0, 1.0, false)
+		"kitaplik":
+			_prop("shelf_A_big", Vector3(-5.75, 0, -0.4), PI / 2.0)
+		"tablo":
+			_prop("pictureframe_large_B", Vector3(0.6, 1.9, 4.45), PI, 1.0, false)
+		"hali":
+			_prop("rug_rectangle_B", Vector3(-3.4, 0.012, 2.6), PI / 2.0, 1.0, false)
+		"minder":
+			_prop("pillow_A", Vector3(4.0, 0.25, 3.9), 0.4, 1.0, false)
+			_prop("pillow_B", Vector3(5.2, 0.25, 2.8), -0.5, 1.0, false)
+		"okuma":
+			_prop("armchair", Vector3(-1.6, 0, 3.9), PI)
+			_prop("table_small", Vector3(-2.7, 0, 4.0), 0.0)
+			_prop("book_set", Vector3(-2.7, 0.62, 4.0), 0.3, 1.0, false)
+			_prop("pictureframe_standing_A", Vector3(4.6, 0.95, -4.2), 0.0, 1.0, false)

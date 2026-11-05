@@ -95,6 +95,8 @@ func _ready() -> void:
 	home_node = HomeScript.new()
 	add_child(home_node)
 	home_node.build(HOME_IN)
+	for did in D.get("decor", []):
+		home_node.add_decor(str(did))
 
 	hud = HudScript.new()
 	add_child(hud)
@@ -405,6 +407,16 @@ func _tick_home(delta: float) -> void:
 			pet_node.goal = home_node.pet_bed
 			pet_node.mode = "go"
 
+func _decor_items() -> Array:
+	var owned: Array = D.get("decor", [])
+	var items := []
+	for k in HomeScript.DECOR:
+		var info: Dictionary = HomeScript.DECOR[k]
+		if owned.has(k):
+			continue
+		items.append({"id": "decor:" + k, "title": "Evin için: " + str(info.name), "sub": "Hipodrom'daki evine yerleşir.", "price": "%d puan" % int(info.price), "enabled": int(D.pts) >= int(info.price)})
+	return items
+
 func _apply_player_colors() -> void:
 	var cur: Dictionary = D.get("cols", {})
 	player.colors.clear()
@@ -542,6 +554,7 @@ func _sync_hud() -> void:
 		{"id": "treat", "title": "Ödül maması", "sub": "Oyundan sonra ver. Dostluğunu bir kat artırır.", "price": "%d puan" % TREAT_PRICE, "enabled": int(D.pts) >= TREAT_PRICE},
 		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4},
 		{"id": "look", "title": "Kadın / erkek karakter", "sub": "Karakterini değiştir.", "price": "Değiştir", "enabled": true},
+		] + _decor_items() + [
 		{"id": "col:shirt", "title": "Üst rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE},
 		{"id": "col:pants", "title": "Pantolon / etek rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE},
 		{"id": "col:hair", "title": "Saç rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE}] + _pet_items())
@@ -609,6 +622,19 @@ func _on_buy(id: String) -> void:
 		D.ch = LOOKS[i]
 		_apply_player_colors()
 		_save()
+		return
+	if id.begins_with("decor:"):
+		var did := id.substr(6)
+		var info: Dictionary = HomeScript.DECOR[did]
+		if int(D.pts) < int(info.price):
+			return
+		D.pts = int(D.pts) - int(info.price)
+		var dl: Array = D.get("decor", [])
+		dl.append(did)
+		D.decor = dl
+		home_node.add_decor(did)
+		_save(); _sync_hud()
+		hud.toast("%s evine yerleşti" % info.name, 2.2)
 		return
 	if id.begins_with("col:"):
 		if int(D.pts) < COLOR_PRICE:
