@@ -77,6 +77,7 @@ func _ready() -> void:
 		npc.setup(Vector3(pth[0], 0, pth[1]), Vector3(pth[2], 0, pth[3]))
 		npcs.append(npc)
 	_make_gulls()
+	_make_pigeons()
 	_make_play_props()
 	_load_save()
 	_make_player()
@@ -158,6 +159,73 @@ func _make_gulls() -> void:
 		add_child(gnode)
 		var centers := [Vector3(0, 0, -25), Vector3(-50, 0, -22), Vector3(40, 0, -30), Vector3(110, 0, -25)]
 		gulls.append({"n": gnode, "c": centers[i % centers.size()], "r": 7.0 + i * 1.6, "a": i * 1.1, "h": 7.0 + (i % 4) * 2.0, "sp": 0.35 + (i % 3) * 0.08, "dive": 0.0, "dp": Vector3.ZERO})
+
+# --- güvercinler: yem gagalar, yaklaşınca kanat çırpıp kaçar ---
+var pigeons: Array = []
+func _make_pigeons() -> void:
+	var cols := [Color("#8e97a3"), Color("#7d8590"), Color("#a7aeb6"), Color("#6c6f75"), Color("#c9c3ba")]
+	var sph := SphereMesh.new(); sph.radius = 0.5; sph.height = 1.0; sph.radial_segments = 8; sph.rings = 5
+	var neck := StandardMaterial3D.new(); neck.albedo_color = Color("#5f7a6e")
+	var beak := StandardMaterial3D.new(); beak.albedo_color = Color("#e0a050")
+	var flocks := [Vector3(-10, 0, 10), Vector3(42, 0, 240), Vector3(30, 0, -192), Vector3(-30, 0, 2), Vector3(180, 0, -300)]
+	for f in flocks:
+		for i in 9:
+			var pn := Node3D.new()
+			var bm := StandardMaterial3D.new(); bm.albedo_color = cols[randi() % cols.size()]
+			var body := MeshInstance3D.new(); body.mesh = sph; body.material_override = bm; body.scale = Vector3(0.16, 0.15, 0.26); body.position.y = 0.13; pn.add_child(body)
+			var hd := Node3D.new(); hd.position = Vector3(0, 0.24, 0.1); pn.add_child(hd)
+			var h := MeshInstance3D.new(); h.mesh = sph; h.material_override = neck; h.scale = Vector3(0.09, 0.09, 0.1); hd.add_child(h)
+			var bk := MeshInstance3D.new(); bk.mesh = sph; bk.material_override = beak; bk.scale = Vector3(0.025, 0.025, 0.06); bk.position = Vector3(0, -0.01, 0.06); hd.add_child(bk)
+			var wings := []
+			for sx in [-1.0, 1.0]:
+				var w := MeshInstance3D.new(); w.mesh = sph; w.material_override = bm; w.scale = Vector3(0.22, 0.03, 0.16); w.position = Vector3(sx * 0.1, 0.16, -0.02); pn.add_child(w)
+				wings.append(w)
+			for c in pn.find_children("*", "MeshInstance3D", true, false):
+				(c as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(pn)
+			var home: Vector3 = f + Vector3(randf_range(-4, 4), 0, randf_range(-4, 4))
+			pn.position = home
+			pn.rotation.y = randf() * TAU
+			pn.scale = Vector3.ONE * 1.3
+			pigeons.append({"n": pn, "hd": hd, "w": wings, "c": f, "fly": 0.0, "v": Vector3.ZERO, "ph": randf() * 6.0, "walk": 0.0})
+
+func _tick_pigeons(delta: float) -> void:
+	var pp := player.global_position
+	for p in pigeons:
+		var n: Node3D = p.n
+		var near := Vector2(n.position.x - pp.x, n.position.z - pp.z).length()
+		if near > 60.0:
+			n.visible = false
+			continue
+		n.visible = true
+		p.ph += delta
+		if p.fly > 0.0:
+			p.fly -= delta
+			n.position += p.v * delta
+			p.v.y -= 1.2 * delta
+			for w in p.w:
+				(w as Node3D).rotation.z = sin(p.ph * 28.0) * 0.9 * (1.0 if (w as Node3D).position.x > 0 else -1.0)
+			if p.fly <= 0.0:
+				# yeni bir noktaya süzülerek iner
+				var land: Vector3 = p.c + Vector3(randf_range(-5, 5), 0, randf_range(-5, 5))
+				var tw := create_tween()
+				tw.tween_property(n, "position", land, 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+				tw.tween_callback(func(): for w in p.w: (w as Node3D).rotation.z = 0.0)
+			continue
+		if near < 2.6 and n.position.y < 0.05:
+			var away := Vector3(n.position.x - pp.x, 0, n.position.z - pp.z).normalized()
+			p.v = away * randf_range(3.0, 5.0) + Vector3(0, randf_range(3.5, 5.0), 0)
+			p.fly = randf_range(1.2, 2.0)
+			n.rotation.y = atan2(away.x, away.z)
+			continue
+		# gagalama ve küçük adımlar
+		(p.hd as Node3D).rotation.x = maxf(0.0, sin(p.ph * 5.0)) * 0.9 if fmod(p.ph, 4.0) < 2.0 else 0.0
+		p.walk -= delta
+		if p.walk <= 0.0:
+			p.walk = randf_range(1.0, 3.0)
+			n.rotation.y += randf_range(-1.2, 1.2)
+		if fmod(p.ph, 4.0) >= 2.0:
+			n.position += Vector3(sin(n.rotation.y), 0, cos(n.rotation.y)) * delta * 0.35
 
 func _make_play_props() -> void:
 	ball = MeshInstance3D.new()
@@ -824,6 +892,7 @@ func _process(delta: float) -> void:
 	var best = null
 	var bd := 2.4
 	var ppos := Vector2(player.position.x, player.position.z)
+	_tick_pigeons(delta)
 	if pet_node:
 		pet_node.tick(delta, player.global_position, t)
 	for a in animals:

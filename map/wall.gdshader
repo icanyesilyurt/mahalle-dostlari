@@ -9,13 +9,21 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	wnrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
-// COLOR.a: 1 = sıva, 0.5 = ahşap kaplama (Osmanlı evi), 0.25 = tuğla (Galata, Karaköy)
+// COLOR.a: 0.1 = kesme taş, 1 = sıva, 0.5 = ahşap kaplama (Osmanlı evi), 0.25 = tuğla (Galata, Karaköy)
 void fragment() {
 	vec4 t = texture(tex, UV);
 	vec3 wall = to_lin(COLOR.rgb);
 	float along = abs(wnrm.x) > abs(wnrm.z) ? wpos.z : wpos.x;
 	float style = COLOR.a;
-	if (style < 0.4) {
+	if (style < 0.15) {
+		// kesme taş (camiler, kule): büyük bloklar, ince derz
+		float row = floor(wpos.y / 0.55);
+		float bx = along / 1.1 + mod(row, 2.0) * 0.5;
+		vec2 f = vec2(fract(bx), fract(wpos.y / 0.55));
+		float mortar = step(f.x, 0.025) + step(f.y, 0.045);
+		wall *= 0.9 + 0.14 * hash(vec2(floor(bx), row));
+		wall = mix(wall, wall * 0.72, clamp(mortar, 0.0, 1.0));
+	} else if (style < 0.4) {
 		float row = floor(wpos.y / 0.16);
 		float bx = along / 0.34 + mod(row, 2.0) * 0.5;
 		float col = floor(bx);

@@ -92,6 +92,12 @@ func setup_materials() -> void:
 	g.mats["roof"] = shader_mat("res://map/roof.gdshader")
 	for k in ["win_a", "win_b", "win_c", "shop", "door"]:
 		g.mats[k] = shader_mat("res://map/wall.gdshader", "res://map/tex/%s.png" % k)
+	var clear := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	clear.fill(Color(0, 0, 0, 0))
+	var sw := ShaderMaterial.new()
+	sw.shader = load("res://map/wall.gdshader")
+	sw.set_shader_parameter("tex", ImageTexture.create_from_image(clear))
+	g.mats["stonewall"] = sw
 	g.mats["cobble"] = tex_mat("res://map/tex/cobble.png")
 	g.mats["slab"] = tex_mat("res://map/tex/slab.png")
 	g.mats["grass"] = tex_mat("res://map/tex/grass.png")
@@ -196,6 +202,33 @@ func laundry(x: float, za: float, zb: float, y: float = 5.6) -> void:
 			var z := za + 0.7 + i * (L - 1.4) / maxf(1.0, n - 1)
 			var hh := 0.5 + rng.randf() * 0.4
 			g.box(0.04, hh, 0.55 + rng.randf() * 0.3, x, y - hh, z, pick(["#f2efe9", "#c8423a", "#3b6aa8", "#e2a33b", "#8fbf5a", "#d98aa0", "#f2efe9", "#6fb3d6"]))
+
+## Kafe: masa, sandalyeler, şemsiye
+func cafe(x: float, z: float, col: Color) -> void:
+	g.put("cyl", Vector3(x, 0.72, z), C("#f2efe9"), 0, Vector3(0.45, 0.05, 0.45))
+	g.put("cyl8", Vector3(x, 0.36, z), C("#3a3633"), 0, Vector3(0.05, 0.72, 0.05))
+	for k in 3:
+		var a := k * TAU / 3.0 + rng.randf() * 0.4
+		var cxp := x + cos(a) * 0.75; var czp := z + sin(a) * 0.75
+		g.box(0.42, 0.06, 0.42, cxp, 0.45, czp, C("#8a5a3c"), -a)
+		g.box(0.42, 0.5, 0.05, cxp + cos(a) * 0.2, 0.45, czp + sin(a) * 0.2, C("#8a5a3c"), -a + PI / 2)
+		for q in 4:
+			var lx := cxp + cos(a + q * PI / 2 + PI / 4) * 0.2; var lz := czp + sin(a + q * PI / 2 + PI / 4) * 0.2
+			g.box(0.04, 0.45, 0.04, lx, 0, lz, C("#3a3633"))
+	g.put("cyl8", Vector3(x, 1.2, z), C("#3a3633"), 0, Vector3(0.04, 2.4, 0.04))
+	g.put("cone8", Vector3(x, 2.55, z), col, 0, Vector3(1.4, 0.55, 1.4))
+
+func cafe_row(x0: float, z0: float, n: int, dx: float, dz: float) -> void:
+	var col := pick(AWN)
+	for i in n:
+		cafe(x0 + dx * i, z0 + dz * i, col if rng.randf() < 0.7 else C("#f2efe9"))
+
+func flower_bed(x: float, z: float, w: float, d: float) -> void:
+	g.box(w, 0.35, d, x, 0, z, C("#b9ab94"))
+	g.box(w - 0.3, 0.05, d - 0.3, x, 0.35, z, C("#5a3f2c"))
+	for i in int(w * d * 1.2):
+		var fx := x + (rng.randf() - 0.5) * (w - 0.5); var fz := z + (rng.randf() - 0.5) * (d - 0.5)
+		g.put("ico", Vector3(fx, 0.5, fz), pick(["#e0483a", "#f2c230", "#d98aa0", "#f2efe9", "#9a5ac8", "#5f8f45", "#5f8f45"]), rng.randf(), Vector3(0.28, 0.25, 0.28))
 
 func flower_pot(x: float, z: float) -> void:
 	g.put("cyl8", Vector3(x, 0.3, z), C("#b5643c"), 0, Vector3(0.3, 0.6, 0.3))
@@ -340,9 +373,12 @@ func flush_chunk(name: String, vis: float = 260.0) -> void:
 		mi.visibility_range_end_margin = 20.0
 
 # ------------------------------------------------------------ simge yapılar
+func stone(c: Color) -> Color:
+	return Color(c.r, c.g, c.b, 0.1)
+
 func minaret(x: float, z: float, h: float, col: Color, balconies: int = 2, r: float = 0.85) -> void:
-	g.put("cyl8", Vector3(x, 1.5, z), shade(col, 0.95), PI / 8, Vector3(r * 1.5, 3.0, r * 1.5))
-	g.put("cyl", Vector3(x, h / 2.0, z), col, 0, Vector3(r, h, r))
+	g.put("cyl8", Vector3(x, 1.5, z), stone(shade(col, 0.95)), PI / 8, Vector3(r * 1.5, 3.0, r * 1.5), "stonewall")
+	g.put("cyl", Vector3(x, h / 2.0, z), stone(col), 0, Vector3(r, h, r), "stonewall")
 	for k in balconies:
 		var y := h * (0.62 + k * 0.17)
 		g.put("cyl", Vector3(x, y, z), shade(col, 0.9), 0, Vector3(r * 1.55, 0.5, r * 1.55))
@@ -377,11 +413,9 @@ func arch_windows(cx: float, cz: float, half: float, y: float, n: int, w: float,
 
 func mosque(cx: float, cz: float, size: float, h: float, r: float, col: Color, semis: int) -> void:
 	var hs := size / 2.0
-	g.box(size, h, size, cx, 0, cz, col)
+	g.wall_box(size, h, size, cx, 0, cz, stone(col), 0, "win_c", 3.4, h / 2.0, true)
 	g.box(size + 0.5, 0.5, size + 0.5, cx, h, cz, shade(col, 0.85))
-	arch_windows(cx, cz, hs, 2.0, int(size / 3.2), 1.0, 2.2, C("#3b4652"))
-	arch_windows(cx, cz, hs, h - 4.0, int(size / 3.2), 1.0, 2.2, C("#3b4652"))
-	g.box(size * 0.62, 3.0, size * 0.62, cx, h + 0.5, cz, shade(col, 0.95))
+	g.wall_box(size * 0.62, 3.0, size * 0.62, cx, h + 0.5, cz, stone(shade(col, 0.95)), 0, "win_c", 2.6, 3.0)
 	dome(cx, h + 3.5, cz, r, 0.72, 1.6)
 	if semis > 0:
 		for k in semis:
@@ -389,13 +423,13 @@ func mosque(cx: float, cz: float, size: float, h: float, r: float, col: Color, s
 			dome(cx + cos(a) * r * 0.95, h + 0.5, cz + sin(a) * r * 0.95, r * 0.62, 0.72, 0.6)
 	for p: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		var px := cx + p.x * (hs - 3.2); var pz := cz + p.y * (hs - 3.2)
-		g.put("cyl8", Vector3(px, h + 2.0, pz), shade(col, 0.95), PI / 8, Vector3(1.8, 4.0, 1.8))
+		g.put("cyl8", Vector3(px, h + 2.0, pz), stone(shade(col, 0.95)), PI / 8, Vector3(1.8, 4.0, 1.8), "stonewall")
 		dome(px, h + 4.0, pz, 1.7, 0.8, 0.0)
 	add_col(cx - hs, cx + hs, cz - hs, cz + hs)
 
 func build_ayasofya(cx: float, cz: float) -> void:
 	var B := C("#d99a74")
-	g.box(36, 11, 30, cx, 0, cz, B)
+	g.wall_box(36, 11, 30, cx, 0, cz, B, 0, "win_c", 3.6, 5.5, true)
 	g.box(37, 0.5, 31, cx, 11, cz, shade(B, 0.85))
 	for k in range(-3, 4):
 		for side in [-1.0, 1.0]:
@@ -404,9 +438,7 @@ func build_ayasofya(cx: float, cz: float) -> void:
 	for side in [-1.0, 1.0]:
 		g.box(4, 16, 7, cx + side * 9, 0, cz - 17.5, shade(B, 0.88))
 		g.box(4, 16, 7, cx + side * 9, 0, cz + 17.5, shade(B, 0.88))
-	arch_windows(cx, cz, 15.0, 3.0, 9, 1.4, 2.6, C("#3b4652"))
-	arch_windows(cx, cz, 15.0, 7.0, 9, 1.4, 2.6, C("#3b4652"))
-	g.box(22, 5, 24, cx, 11, cz, shade(B, 0.95))
+	g.wall_box(22, 5, 24, cx, 11, cz, shade(B, 0.95), 0, "win_c", 2.8, 5.0, true)
 	g.box(4.5, 6.5, 0.2, cx - 18.1, 0, cz, C("#5e4337"), PI / 2)
 	dome(cx, 16.0, cz, 12.0, 0.5, 2.2)
 	dome(cx - 12.0, 13.0, cz, 7.5, 0.62, 0.0)
@@ -462,7 +494,7 @@ func build_yeni_cami(cx: float, cz: float) -> void:
 	big_label("Yeni Cami", Vector3(cx, 32, cz), 130)
 
 func build_misir_carsisi(x0: float, x1: float, z0: float, z1: float) -> void:
-	var col := C("#d6b48a")
+	var col := stone(C("#d6b48a"))
 	g.wall_box(x1 - x0, 7.5, z1 - z0, (x0 + x1) / 2.0, 0, (z0 + z1) / 2.0, col, 0, "win_c", 3.4, 7.5)
 	g.box(x1 - x0 + 0.4, 0.5, z1 - z0 + 0.4, (x0 + x1) / 2.0, 7.5, (z0 + z1) / 2.0, shade(col, 0.82))
 	var x := x0 + 3.0
@@ -488,8 +520,8 @@ func build_sirkeci(x0: float, x1: float, z0: float, z1: float) -> void:
 
 func build_galata_kulesi(x: float, z: float) -> void:
 	var S := C("#cbb796")
-	g.put("cyl", Vector3(x, 1.0, z), shade(S, 0.85), 0, Vector3(6.4, 2.0, 6.4))
-	g.put("cyl", Vector3(x, 15.0, z), S, 0, Vector3(5.6, 30.0, 5.6))
+	g.put("cyl", Vector3(x, 1.0, z), stone(shade(S, 0.85)), 0, Vector3(6.4, 2.0, 6.4), "stonewall")
+	g.put("cyl", Vector3(x, 15.0, z), stone(S), 0, Vector3(5.6, 30.0, 5.6), "stonewall")
 	for k in 5:
 		g.put("cyl", Vector3(x, 6.0 + k * 5.0, z), shade(S, 0.9), 0, Vector3(5.7, 0.35, 5.7))
 	for row in 4:
@@ -498,7 +530,7 @@ func build_galata_kulesi(x: float, z: float) -> void:
 			g.box(0.9, 1.8, 0.12, x + cos(a) * 5.66, 7.0 + row * 5.5, z + sin(a) * 5.66, C("#3b4652"), -a + PI / 2)
 	g.put("cyl", Vector3(x, 30.4, z), shade(S, 0.75), 0, Vector3(6.4, 0.8, 6.4))
 	g.put("cyl", Vector3(x, 31.3, z), C("#2b2b2b"), 0, Vector3(6.35, 1.0, 6.35))
-	g.put("cyl", Vector3(x, 33.0, z), S, 0, Vector3(5.2, 4.0, 5.2))
+	g.put("cyl", Vector3(x, 33.0, z), stone(S), 0, Vector3(5.2, 4.0, 5.2), "stonewall")
 	for k in 12:
 		var a2 := k * TAU / 12
 		g.box(1.1, 2.4, 0.12, x + cos(a2) * 5.22, 32.0, z + sin(a2) * 5.22, C("#3b4652"), -a2 + PI / 2)
@@ -765,6 +797,12 @@ func build_specials() -> void:
 		var ang := k * TAU / 8.0
 		bench(fcx + cos(ang) * 11.0, fcz + sin(ang) * 11.0, -ang + PI / 2)
 		lamp(fcx + cos(ang + 0.4) * 13.0, fcz + sin(ang + 0.4) * 13.0)
+	# çay bahçesi ve çiçek tarhları
+	cafe_row(-30.0, 214.0, 4, 0.0, 3.6)
+	cafe_row(-24.0, 216.0, 3, 0.0, 3.6)
+	for k in 4:
+		var fa := k * TAU / 4.0 + PI / 4.0
+		flower_bed(fcx + cos(fa) * 17.0, fcz + sin(fa) * 17.0, 3.0, 3.0)
 	simit_cart(58, 214)
 	label("SİMİT", Vector3(58, 3.3, 214), 50, C("#23302b"), C("#fffaf1"), 22)
 	g.flush(L, mroot, "SultanahmetPark")
@@ -846,6 +884,12 @@ func build_north() -> void:
 		tree(p.x, p.y, "plane", 0.9)
 		bench(p.x + 3, p.y, 0.0)
 	g.put("cyl8", Vector3(gx0 + 10, 0.5, (gz0 + gz1) / 2.0), C("#d8d2c4"), 0, Vector3(1.4, 1.0, 1.4))
+	cafe_row(gx0 + 17, gz1 - 3.2, 4, 3.0, 0.0)
+	cafe_row(gx1 - 26, gz1 - 3.2, 4, 3.0, 0.0)
+	cafe_row(gx1 - 26, gz0 + 3.2, 4, 3.0, 0.0)
+	flower_bed(gx0 + 25, gz0 + 4.5, 6.0, 2.0)
+	flower_bed((gx0 + gx1) / 2.0 - 10.0, (gz0 + gz1) / 2.0, 2.0, 5.0)
+	flower_bed((gx0 + gx1) / 2.0 + 10.0, (gz0 + gz1) / 2.0, 2.0, 5.0)
 	g.flush(mroot.get_node("SimgeYapilar"), mroot, "GalataKulesi")
 	# arka plan
 	var xx := -150.0
