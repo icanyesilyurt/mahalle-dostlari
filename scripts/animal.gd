@@ -46,6 +46,33 @@ func _mat(c: Color, unshaded := false) -> StandardMaterial3D:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
 
+static var _facet_mesh: ArrayMesh
+## Köşeli (düz gölgeli) küre: köpek modelleriyle aynı low-poly görünüm
+static func _facet() -> ArrayMesh:
+	if _facet_mesh == null:
+		var sm := SphereMesh.new(); sm.radius = 1.0; sm.height = 2.0; sm.radial_segments = 12; sm.rings = 7
+		var arr := sm.get_mesh_arrays()
+		var V: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		var I: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+		var P := PackedVector3Array(); var N := PackedVector3Array()
+		for i in range(0, I.size(), 3):
+			var a := V[I[i]]; var b := V[I[i + 1]]; var c := V[I[i + 2]]
+			var n := (b - a).cross(c - a)
+			if n.length() < 0.000001:
+				continue
+			n = n.normalized()
+			if n.dot((a + b + c) / 3.0) < 0.0:
+				n = -n
+			P.append(a); P.append(b); P.append(c)
+			N.append(n); N.append(n); N.append(n)
+		var out := []
+		out.resize(Mesh.ARRAY_MAX)
+		out[Mesh.ARRAY_VERTEX] = P
+		out[Mesh.ARRAY_NORMAL] = N
+		_facet_mesh = ArrayMesh.new()
+		_facet_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, out)
+	return _facet_mesh
+
 func _part(parent: Node3D, size: Vector3, pos: Vector3, m: Material, mesh: Mesh = null) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	if mesh == null:
@@ -118,6 +145,7 @@ func build() -> void:
 
 ## Kedi: tombul, büyük kafalı, yuvarlak hatlı (prosedürel). Irk parametreleri breeds.gd'de.
 func _build_cat(sph: SphereMesh) -> void:
+	var fs := _facet()
 	var B: Dictionary = Breeds.get_breed(true, breed)
 	if not B.is_empty():
 		color = Color(B.base)
@@ -146,26 +174,26 @@ func _build_cat(sph: SphereMesh) -> void:
 	var shine := _mat(Color.WHITE, true)
 	var lh := 0.24 * ls
 	var bw := 1.0 + fluff * 0.3
-	var body := _part(rig, Vector3(0.17 * bw, 0.155 * bw, 0.27 * (1.0 + fluff * 0.15)), Vector3(0, 0.06 + lh, -0.02), m, sph)
+	var body := _part(rig, Vector3(0.17 * bw, 0.155 * bw, 0.27 * (1.0 + fluff * 0.15)), Vector3(0, 0.06 + lh, -0.02), m, fs)
 	body.rotation.x = -0.08
-	_part(rig, Vector3(0.12 * bw, 0.12 * bw, 0.17), Vector3(0, 0.03 + lh, 0.06), light, sph)
+	_part(rig, Vector3(0.12 * bw, 0.12 * bw, 0.17), Vector3(0, 0.03 + lh, 0.06), light, fs)
 	if fluff > 0.0:
 		# kabarık göğüs yelesi
-		_part(rig, Vector3(0.15, 0.13, 0.1) * (1.0 + fluff * 0.4), Vector3(0, 0.12 + lh, 0.15), light, sph)
+		_part(rig, Vector3(0.15, 0.13, 0.1) * (1.0 + fluff * 0.4), Vector3(0, 0.12 + lh, 0.15), light, fs)
 	head = Node3D.new(); head.position = Vector3(0, 0.28 + lh + fluff * 0.03, 0.22 + fluff * 0.02); head.scale = Vector3.ONE * hs; rig.add_child(head)
-	_part(head, Vector3(0.175, 0.155, 0.16 if not flat else 0.13) * (1.0 + fluff * 0.12), Vector3.ZERO, ptm if (pts and false) else m, sph)
+	_part(head, Vector3(0.175, 0.155, 0.16 if not flat else 0.13) * (1.0 + fluff * 0.12), Vector3.ZERO, ptm if (pts and false) else m, fs)
 	if pts:
-		_part(head, Vector3(0.1, 0.085, 0.06), Vector3(0, -0.035, 0.11), ptm, sph)
+		_part(head, Vector3(0.1, 0.085, 0.06), Vector3(0, -0.035, 0.11), ptm, fs)
 	var mz := 0.12 if not flat else 0.1
 	for sx: float in [-1.0, 1.0]:
-		_part(head, Vector3(0.06, 0.05, 0.05), Vector3(0.04 * sx, -0.06, mz), light if not pts else ptm, sph)
+		_part(head, Vector3(0.06, 0.05, 0.05), Vector3(0.04 * sx, -0.06, mz), light if not pts else ptm, fs)
 	_part(head, Vector3(0.022, 0.016, 0.015), Vector3(0, -0.03, mz + 0.035), pk, sph)
 	var cone := CylinderMesh.new(); cone.top_radius = 0.0; cone.bottom_radius = 1.0; cone.height = 1.0; cone.radial_segments = 8
 	var em := ptm if pts else m
 	for i in 2:
 		var sx := -1.0 if i == 0 else 1.0
 		if B.get("fold", false):
-			var f := _part(head, Vector3(0.06, 0.05, 0.045), Vector3(0.075 * sx, 0.125, 0.02), em, sph)
+			var f := _part(head, Vector3(0.06, 0.05, 0.045), Vector3(0.075 * sx, 0.125, 0.02), em, fs)
 			f.rotation.x = 0.5
 		else:
 			var e := _part(head, Vector3(0.065 * es, 0.12 * es, 0.04), Vector3(0.095 * sx, 0.13 + 0.02 * es, -0.01), em, cone)
@@ -185,9 +213,20 @@ func _build_cat(sph: SphereMesh) -> void:
 		var leg := Node3D.new(); leg.position = Vector3(p.x, lh, p.y)
 		if p.y > 0.0: rig.add_child(leg)
 		else: add_child(leg)
-		_part(leg, Vector3(0.045, 0.12 * ls, 0.045) * (1.0 + fluff * 0.2), Vector3(0, -0.12 * ls, 0), ptm if pts else m, sph)
-		_part(leg, Vector3(0.05, 0.035, 0.06), Vector3(0, -lh + 0.03, 0.015), ptm if pts else m, sph)
+		_part(leg, Vector3(0.045, 0.12 * ls, 0.045) * (1.0 + fluff * 0.2), Vector3(0, -0.12 * ls, 0), ptm if pts else m, fs)
+		_part(leg, Vector3(0.05, 0.035, 0.06), Vector3(0, -lh + 0.03, 0.015), ptm if pts else m, fs)
 		legs.append(leg)
+	# arka kalçalar ve göğüs: daha kedi gibi bir siluet
+	for sx2: float in [-1.0, 1.0]:
+		_part(rig, Vector3(0.075, 0.1, 0.11) * (1.0 + fluff * 0.25), Vector3(0.07 * sx2, 0.03 + lh, -0.17), m, fs)
+	_part(rig, Vector3(0.1, 0.11, 0.08) * (1.0 + fluff * 0.3), Vector3(0, 0.05 + lh, 0.16), light if not pts else m, fs)
+	# bıyıklar
+	var wm := _mat(Color("#f4f1ea"), true)
+	for sx3: float in [-1.0, 1.0]:
+		for k3 in 2:
+			var wk := _part(head, Vector3(0.11, 0.004, 0.004), Vector3(0.09 * sx3, -0.045 - k3 * 0.012, mz + 0.01), wm)
+			wk.rotation.z = (0.12 - k3 * 0.2) * sx3
+			wk.rotation.y = -0.25 * sx3
 	tail = Node3D.new(); tail.position = Vector3(0, 0.12 + lh, -0.26); rig.add_child(tail)
 	var seg: Node3D = tail
 	var bend := [-0.9, -0.35, -0.3, -0.25]
@@ -197,40 +236,41 @@ func _build_cat(sph: SphereMesh) -> void:
 		var j := Node3D.new(); j.rotation.x = bend[k]; seg.add_child(j)
 		if k > 0:
 			j.position = Vector3(0, 0, -0.1 * ts)
-		_part(j, Vector3((0.035 - k * 0.003) * tw, (0.035 - k * 0.003) * tw, 0.07 * ts), Vector3(0, 0, -0.05 * ts), ptm if (pts and k > 1) else m, sph)
+		_part(j, Vector3((0.035 - k * 0.003) * tw, (0.035 - k * 0.003) * tw, 0.07 * ts), Vector3(0, 0, -0.05 * ts), ptm if (pts and k > 1) else m, fs)
 		seg = j
 	if hairless:
 		# kırışık alın
 		for k in 3:
-			_part(head, Vector3(0.06, 0.006, 0.02), Vector3(0, 0.07 + k * 0.022, 0.12), _mat(color.darkened(0.15)), sph)
+			_part(head, Vector3(0.06, 0.006, 0.02), Vector3(0, 0.07 + k * 0.022, 0.12), _mat(color.darkened(0.15)), fs)
 	_decorate(sph)
 
 ## Kedi desenleri: tekir çizgileri, smokin göğüs ve patiler, üç renkli lekeler, benekler
 func _decorate(sph: SphereMesh) -> void:
+	var fs := _facet()
 	var m2 := _mat(color2)
 	var lh: float = (legs[0] as Node3D).position.y if legs.size() > 0 else 0.24
 	match pattern:
 		"tekir":
 			for k in 4:
-				var st := _part(rig, Vector3(0.13, 0.03, 0.035), Vector3(0, 0.2 + lh, -0.16 + k * 0.08), m2, sph)
+				var st := _part(rig, Vector3(0.13, 0.03, 0.035), Vector3(0, 0.2 + lh, -0.16 + k * 0.08), m2, fs)
 				st.rotation.x = 0.1
 			for k in 3:
-				_part(head, Vector3(0.012, 0.012, 0.05), Vector3(-0.03 + k * 0.03, 0.14, 0.06), m2, sph)
+				_part(head, Vector3(0.012, 0.012, 0.05), Vector3(-0.03 + k * 0.03, 0.14, 0.06), m2, fs)
 		"smokin":
-			_part(rig, Vector3(0.1, 0.11, 0.07), Vector3(0, 0.06 + lh, 0.17), m2, sph)
-			_part(head, Vector3(0.09, 0.06, 0.05), Vector3(0, -0.07, 0.12), m2, sph)
+			_part(rig, Vector3(0.1, 0.11, 0.07), Vector3(0, 0.06 + lh, 0.17), m2, fs)
+			_part(head, Vector3(0.09, 0.06, 0.05), Vector3(0, -0.07, 0.12), m2, fs)
 			for l in legs:
-				_part(l as Node3D, Vector3(0.052, 0.037, 0.062), Vector3(0, -lh + 0.035, 0.016), m2, sph)
+				_part(l as Node3D, Vector3(0.052, 0.037, 0.062), Vector3(0, -lh + 0.035, 0.016), m2, fs)
 		"uc_renk":
-			_part(rig, Vector3(0.1, 0.07, 0.11), Vector3(0.05, 0.18 + lh, -0.08), m2, sph)
-			_part(rig, Vector3(0.08, 0.06, 0.09), Vector3(-0.06, 0.17 + lh, 0.06), _mat(Color("#2b2828")), sph)
-			_part(head, Vector3(0.08, 0.07, 0.08), Vector3(0.06, 0.08, 0.0), m2, sph)
+			_part(rig, Vector3(0.1, 0.07, 0.11), Vector3(0.05, 0.18 + lh, -0.08), m2, fs)
+			_part(rig, Vector3(0.08, 0.06, 0.09), Vector3(-0.06, 0.17 + lh, 0.06), _mat(Color("#2b2828")), fs)
+			_part(head, Vector3(0.08, 0.07, 0.08), Vector3(0.06, 0.08, 0.0), m2, fs)
 		"benek":
 			for k in 9:
-				_part(rig, Vector3(0.035, 0.02, 0.035), Vector3(randf_range(-0.12, 0.12), 0.17 + lh + randf() * 0.02, randf_range(-0.2, 0.15)), m2, sph)
+				_part(rig, Vector3(0.035, 0.02, 0.035), Vector3(randf_range(-0.12, 0.12), 0.17 + lh + randf() * 0.02, randf_range(-0.2, 0.15)), m2, fs)
 		"solid", "points":
 			if pattern == "solid" and breed == "" and randf() < 0.3:
-				_part(head, Vector3(0.05, 0.04, 0.04), Vector3(0, 0.1, 0.1), _mat(color.darkened(0.45)), sph)
+				_part(head, Vector3(0.05, 0.04, 0.04), Vector3(0, 0.1, 0.1), _mat(color.darkened(0.45)), fs)
 	if breed == "" and randf() < 0.25:
 		var tor := TorusMesh.new(); tor.inner_radius = 0.8; tor.outer_radius = 1.0
 		_part(head, Vector3(0.09, 0.09, 0.09), Vector3(0, -0.11, -0.02), _mat(Color(["#c8423a", "#3b6aa8", "#e2a33b"][randi() % 3])), tor)
@@ -246,7 +286,8 @@ func _build_dog(sph: SphereMesh) -> void:
 	var bs: float = B.get("size", 1.0) if not B.is_empty() else 1.0
 	var sq: float = B.get("squash", 1.0)
 	var ln: float = B.get("long", 1.0)
-	model.scale = Vector3(DOG_SCALE * bs, DOG_SCALE * bs * sq, DOG_SCALE * bs * ln)
+	var mf := 0.9 if model_id == "wolf" else 1.0
+	model.scale = Vector3(DOG_SCALE * bs, DOG_SCALE * bs * sq, DOG_SCALE * bs * ln) * mf
 	top_y = 1.25 * bs * (0.5 + 0.5 * sq)
 	add_child(model)
 	var mesh_i: MeshInstance3D

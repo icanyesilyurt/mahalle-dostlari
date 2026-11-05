@@ -6,8 +6,8 @@ extends RefCounted
 
 const DOGS := {
 	"sokak": {"name": "Sokak Köpeği", "price": 500, "model": "shiba", "size": 1.1, "main": "#d9b46a", "light": "#f0e2c0"},
-	"kangal": {"name": "Kangal", "price": 1500, "model": "husky", "size": 1.4, "main": "#d8c39a", "light": "#ece0c4", "mark": "#2a2422", "mask": 1.0, "chest": 1.2, "floppy": 1.2, "head": 1.1},
-	"alman_kurdu": {"name": "Alman Kurdu", "price": 1000, "model": "husky", "size": 1.2, "main": "#b0723a", "light": "#c99257", "mark": "#231c18", "saddle": 1.0, "mask": 0.7, "ears": 1.2},
+	"kangal": {"name": "Kangal", "price": 1500, "model": "wolf", "size": 1.4, "main": "#d8c39a", "light": "#ece0c4", "mark": "#2a2422", "mask": 1.0, "chest": 1.2, "floppy": 1.2, "head": 1.1},
+	"alman_kurdu": {"name": "Alman Kurdu", "price": 1000, "model": "wolf", "size": 1.2, "main": "#b0723a", "light": "#c99257", "mark": "#231c18", "saddle": 1.0, "mask": 0.7, "ears": 1.2},
 	"golden": {"name": "Golden Retriever", "price": 1000, "model": "shiba", "size": 1.2, "main": "#d9a25a", "light": "#ecc888", "floppy": 1.4, "tail": 1.3, "chest": 1.1},
 	"labrador": {"name": "Labrador", "price": 900, "model": "shiba", "size": 1.2, "main": "#e2c48e", "light": "#ecd8ae", "floppy": 1.4, "chest": 1.15},
 	"kara_labrador": {"name": "Siyah Labrador", "price": 900, "model": "shiba", "size": 1.2, "main": "#2b2624", "light": "#3a3431", "floppy": 1.4, "chest": 1.15},
@@ -22,10 +22,10 @@ const DOGS := {
 	"chihuahua": {"name": "Chihuahua", "price": 600, "model": "shiba", "size": 0.55, "main": "#e0b07a", "light": "#f0d4ac", "head": 1.45, "ears": 1.8},
 	"pomeranian": {"name": "Pomeranian", "price": 800, "model": "shiba", "size": 0.6, "squash": 0.8, "main": "#e89a4a", "light": "#f4c58a", "chest": 1.5, "head": 1.25, "tail": 1.3},
 	"samoyed": {"name": "Samoyed", "price": 1200, "model": "husky", "size": 1.1, "main": "#f2efe8", "light": "#ffffff", "chest": 1.35, "tail": 1.3},
-	"rottweiler": {"name": "Rottweiler", "price": 1100, "model": "husky", "size": 1.25, "main": "#1f1b1a", "light": "#8a4a22", "chest": 1.3, "floppy": 1.3, "head": 1.1},
-	"doberman": {"name": "Doberman", "price": 1000, "model": "shiba", "size": 1.25, "main": "#1f1b1a", "light": "#8f4e26", "ears": 1.35, "tail": 0.3, "long": 0.95},
+	"rottweiler": {"name": "Rottweiler", "price": 1100, "model": "wolf", "size": 1.25, "main": "#1f1b1a", "light": "#8a4a22", "chest": 1.3, "floppy": 1.3, "head": 1.1},
+	"doberman": {"name": "Doberman", "price": 1000, "model": "wolf", "size": 1.25, "main": "#1f1b1a", "light": "#8f4e26", "ears": 1.35, "tail": 0.3, "long": 0.95},
 	"border_collie": {"name": "Border Collie", "price": 900, "model": "husky", "size": 1.0, "main": "#1f1b1a", "light": "#f2f0ea", "floppy": 0.8},
-	"saint_bernard": {"name": "Saint Bernard", "price": 1400, "model": "husky", "size": 1.45, "main": "#a0522d", "light": "#f4ece0", "chest": 1.35, "floppy": 1.4, "head": 1.2},
+	"saint_bernard": {"name": "Saint Bernard", "price": 1400, "model": "wolf", "size": 1.45, "main": "#a0522d", "light": "#f4ece0", "chest": 1.35, "floppy": 1.4, "head": 1.2},
 	"kanis": {"name": "Kaniş", "price": 900, "model": "shiba", "size": 0.85, "main": "#f2ece2", "light": "#f8f4ee", "floppy": 1.5, "ears": 1.3, "puff": true},
 	"bulldog": {"name": "Bulldog", "price": 1000, "model": "shiba", "size": 0.95, "squash": 0.68, "main": "#d9c09a", "light": "#f4ece0", "chest": 1.5, "head": 1.35, "neck": 0.5, "floppy": 1.0, "ears": 0.8, "tail": 0.3},
 }
