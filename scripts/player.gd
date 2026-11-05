@@ -2,7 +2,7 @@ extends CharacterBody3D
 ## Oyuncu karakteri: yürür, döner, yürüme/durma animasyonu oynatır.
 
 var move_input := Vector3.ZERO   # dünya yönünde hareket isteği (uzunluk 0..1)
-var speed := 4.8
+var speed := 4.3
 var facing := 0.0
 var model: Node3D
 var anim: AnimationPlayer
@@ -24,7 +24,19 @@ func set_look(id: String) -> void:
 		for n in ["idle", "walk", "sprint"]:
 			if anim.has_animation(n):
 				anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+		_calm_bounce(anim.get_animation("walk"), 0.35)
 		anim.play("idle")
+
+## Yürürken gövdenin yukarı aşağı zıplamasını azalt (Kenney animasyonunda kök kemik sekiyor)
+static func _calm_bounce(a: Animation, k: float) -> void:
+	if a == null or a.has_meta("calm"):
+		return
+	a.set_meta("calm", true)
+	for i in a.get_track_count():
+		if a.track_get_type(i) == Animation.TYPE_POSITION_3D and str(a.track_get_path(i)).ends_with(":root"):
+			for j in a.track_get_key_count(i):
+				var v: Vector3 = a.track_get_key_value(i, j)
+				a.track_set_key_value(i, j, Vector3(v.x, v.y * k, v.z))
 
 ## Tek seferlik hareket: eğilip mama koyma, yerden alma, sevinme
 func act(n: String) -> void:
@@ -35,6 +47,8 @@ func act(n: String) -> void:
 
 func _ready() -> void:
 	collision_mask = 3
+	floor_snap_length = 0.4
+	floor_max_angle = deg_to_rad(50.0)
 	var shape := CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.32
@@ -74,11 +88,9 @@ func _physics_process(delta: float) -> void:
 			act_t = 0.0
 	elif anim:
 		if moving:
-			var run := hv.length() > 3.6
-			var an := "sprint" if run else "walk"
-			if anim.current_animation != an:
-				anim.play(an, 0.15)
-			anim.speed_scale = clampf(hv.length() / (4.6 if run else 2.4), 0.6, 1.5)
+			if anim.current_animation != "walk":
+				anim.play("walk", 0.15)
+			anim.speed_scale = clampf(hv.length() / 2.0, 0.7, 2.2)
 		else:
 			if anim.current_animation != "idle" and anim.has_animation("idle"):
 				anim.play("idle", 0.2)

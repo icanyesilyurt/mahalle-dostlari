@@ -333,18 +333,23 @@ func hide_actions() -> void:
 func set_hint(t: String) -> void:
 	hint.text = t
 
-func set_joy(on: bool, o: Vector2, v: Vector2) -> void:
+var joy_active := false
+
+func set_joy(on: bool, o: Vector2, v: Vector2, active: bool = true) -> void:
 	joy_on = on
 	joy_o = o
 	joy_v = v
+	joy_active = active
 	joy.queue_redraw()
 
 func _draw_joy() -> void:
 	if not joy_on:
 		return
-	joy.draw_circle(joy_o, 90.0, Color(1, 1, 1, 0.22))
-	joy.draw_arc(joy_o, 90.0, 0.0, TAU, 48, Color(INK, 0.45), 4.0)
-	joy.draw_circle(joy_o + joy_v * 72.0, 38.0, Color(1, 1, 1, 0.8))
+	var a := 1.0 if joy_active else 0.55
+	joy.draw_circle(joy_o, 75.0, Color(0.14, 0.19, 0.17, 0.22 * a))
+	joy.draw_arc(joy_o, 75.0, 0.0, TAU, 48, Color(1, 1, 1, 0.7 * a), 5.0)
+	joy.draw_circle(joy_o + joy_v * 60.0, 34.0, Color(1, 0.98, 0.94, 0.9 * a))
+	joy.draw_arc(joy_o + joy_v * 60.0, 34.0, 0.0, TAU, 32, Color(INK, 0.6 * a), 3.0)
 
 func over_ui(pos: Vector2) -> bool:
 	for c in [act_panel, top_btns, book_panel, shop_panel, map_panel]:

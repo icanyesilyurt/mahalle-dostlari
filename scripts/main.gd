@@ -7,6 +7,9 @@ const PlayerScript := preload("res://scripts/player.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const NpcScript := preload("res://scripts/npc.gd")
 const TREAT_PRICE := 40
+const Breeds := preload("res://scripts/breeds.gd")
+const LOOKS := ["character-male-a", "character-female-c"]
+var pet_node = null
 const PLAY_REWARD := 20
 
 var font: Font
@@ -39,6 +42,8 @@ var manual_cam_t := 0.0
 var joy_id := -1
 var joy_o := Vector2.ZERO
 var joy_v := Vector2.ZERO
+var joy_raw := Vector2.ZERO
+const JOY_R := 75.0
 var look_id := -1
 var mouse_drag := false
 var t := 0.0
@@ -76,6 +81,7 @@ func _ready() -> void:
 	_load_save()
 	_make_player()
 	_make_animals()
+	_spawn_pet()
 
 	hud = HudScript.new()
 	add_child(hud)
@@ -192,7 +198,9 @@ func _debug_shots() -> void:
 # --- oyuncu ve kamera ---
 func _make_player() -> void:
 	player = PlayerScript.new()
-	player.look = str(D.get("ch", "character-male-a"))
+	player.look = str(D.get("ch", LOOKS[0]))
+	if not LOOKS.has(player.look):
+		player.look = LOOKS[0]
 	var st: Array = MAP.start
 	player.position = Vector3(st[0], 0.1, st[1])
 	add_child(player)
@@ -225,6 +233,11 @@ func _make_animals() -> void:
 		n.home = Vector3(a[4], a[6], a[5]); n.place_name = a[7]
 		if a.size() > 8:
 			n.pattern = a[8]; n.color2 = Color(a[9]) if a[9] != "" else n.color; n.size = a[10]; n.tagged = a[11]
+		# sokakta da ırk çeşitliliği (her hayvan için sabit)
+		var rnd := float(absi(hash(n.id)) % 1000) / 1000.0
+		n.breed = Breeds.street_breed(n.cat, n.pattern, n.color, rnd)
+		if n.breed != "":
+			n.size = 1.0 if not n.cat else float(Breeds.get_breed(true, n.breed).get("size", 1.0)) * randf_range(0.95, 1.05)
 		n.cols = COL; n.font = font
 		var r: Dictionary = D.fr.get(n.id, {})
 		n.friend = int(r.get("f", 0))
@@ -234,6 +247,64 @@ func _make_animals() -> void:
 		n.build()
 		n.greeted.connect(_on_greeted)
 		animals.append(n)
+
+# --- sahiplenme ---
+func _pet_items() -> Array:
+	var owned: Array = D.get("pets", [])
+	var items := []
+	for key in owned:
+		var p := str(key).split(":")
+		var b: Dictionary = Breeds.get_breed(p[0] == "cat", p[1])
+		var on := str(D.get("pet", "")) == str(key)
+		items.append({"id": "walk:" + str(key), "title": "Senin dostun: " + str(b.name), "sub": "Şu an yanında" if on else "Yanına alıp birlikte gez.",
+			"price": "Yanında" if on else "Yanına al", "enabled": not on})
+	for cat in [false, true]:
+		var tbl: Dictionary = Breeds.CATS if cat else Breeds.DOGS
+		var keys := tbl.keys()
+		keys.sort_custom(func(x, y): return int(tbl[x].price) < int(tbl[y].price))
+		for k in keys:
+			var key := ("cat:" if cat else "dog:") + str(k)
+			if owned.has(key):
+				continue
+			items.append({"id": "pet:" + key, "title": "Sahiplen: " + str(tbl[k].name), "sub": "Kedi" if cat else "Köpek",
+				"price": "%d puan" % int(tbl[k].price), "enabled": int(D.pts) >= int(tbl[k].price)})
+	return items
+
+func _adopt(id: String) -> void:
+	var key := id.substr(4)
+	var p := key.split(":")
+	var b: Dictionary = Breeds.get_breed(p[0] == "cat", p[1])
+	if int(D.pts) < int(b.price):
+		hud.toast("Yeterli puan yok")
+		return
+	D.pts = int(D.pts) - int(b.price)
+	var owned: Array = D.get("pets", [])
+	owned.append(key)
+	D.pets = owned
+	D.pet = key
+	_save(); _spawn_pet(); _sync_hud()
+	hud.toast("%s artık senin! Yanından ayrılmayacak" % b.name, 3.0)
+
+func _spawn_pet() -> void:
+	if pet_node:
+		pet_node.queue_free()
+		pet_node = null
+	var key := str(D.get("pet", ""))
+	if key == "":
+		return
+	var p := key.split(":")
+	var b: Dictionary = Breeds.get_breed(p[0] == "cat", p[1])
+	if b.is_empty():
+		return
+	var n = AnimalScript.new()
+	n.id = "pet"; n.cat = p[0] == "cat"; n.breed = p[1]; n.animal_name = b.name
+	n.size = float(b.get("size", 1.0)) if n.cat else 1.0
+	n.home = player.position + Vector3(1.2, 0, 1.2)
+	n.cols = COL; n.font = font
+	n.friend = 9; n.hungry = false; n.thirsty = false; n.mode = "follow"
+	add_child(n)
+	n.build()
+	pet_node = n
 
 func _on_greeted(a) -> void:
 	_hearts(a.global_position + Vector3(0, a.top_y, 0))
@@ -326,7 +397,7 @@ func _sync_hud() -> void:
 	hud.set_shop([
 		{"id": "treat", "title": "Ödül maması", "sub": "Oyundan sonra ver. Dostluğunu bir kat artırır.", "price": "%d puan" % TREAT_PRICE, "enabled": int(D.pts) >= TREAT_PRICE},
 		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4},
-		{"id": "look", "title": "Görünüşünü değiştir", "sub": "12 karakterden sıradakine geç. Kıyafet renkleri yakında.", "price": "Ücretsiz", "enabled": true}])
+		{"id": "look", "title": "Kadın / erkek karakter", "sub": "Karakterini değiştir. Kıyafet ve saç renkleri yakında.", "price": "Değiştir", "enabled": true}] + _pet_items())
 
 # --- eylem kartı ---
 func _on_bridge_rail() -> bool:
@@ -374,11 +445,17 @@ func _on_action(id: String) -> void:
 
 func _on_buy(id: String) -> void:
 	if id == "look":
-		var looks: Array = NpcScript.LOOKS
-		var i := (looks.find(player.look) + 1) % looks.size()
-		player.set_look(looks[i])
-		D.ch = looks[i]
+		var i := (LOOKS.find(player.look) + 1) % LOOKS.size()
+		player.set_look(LOOKS[i])
+		D.ch = LOOKS[i]
 		_save()
+		return
+	if id.begins_with("pet:"):
+		_adopt(id)
+		return
+	if id.begins_with("walk:"):
+		D.pet = id.substr(5)
+		_save(); _spawn_pet(); _sync_hud()
 		return
 	var n := 1 if id == "treat" else 5
 	var price := TREAT_PRICE if id == "treat" else TREAT_PRICE * 4
@@ -647,28 +724,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		if e.pressed:
 			if hud.over_ui(e.position):
 				return
-			if e.position.x < vs.x * 0.45 and joy_id == -1:
-				joy_id = e.index; joy_o = e.position; joy_v = Vector2.ZERO
-				hud.set_joy(true, joy_o, joy_v)
+			if e.position.x < vs.x * 0.5 and e.position.y > vs.y * 0.25 and joy_id == -1:
+				joy_id = e.index; joy_o = e.position; joy_raw = Vector2.ZERO
 			elif look_id == -1:
 				look_id = e.index
 		else:
 			if e.index == joy_id:
-				joy_id = -1; joy_v = Vector2.ZERO
-				hud.set_joy(false, joy_o, joy_v)
+				joy_id = -1; joy_raw = Vector2.ZERO
 			if e.index == look_id:
 				look_id = -1
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
 		if d.index == joy_id:
-			joy_v = (d.position - joy_o) / 90.0
-			if joy_v.length() > 1.0:
-				joy_v = joy_v.normalized()
-			hud.set_joy(true, joy_o, joy_v)
+			var off := d.position - joy_o
+			# parmak halkanın dışına çıkarsa halka da peşinden gelir
+			if off.length() > JOY_R:
+				joy_o = d.position - off.normalized() * JOY_R
+				off = d.position - joy_o
+			joy_raw = off / JOY_R
 		elif d.index == look_id:
-			cam_yaw -= d.relative.x * 0.006
-			cam_pitch = clampf(cam_pitch - d.relative.y * 0.004, -0.9, -0.05)
-			manual_cam_t = 2.5
+			var k := 1100.0 / maxf(vs.x, 600.0)
+			cam_yaw -= d.relative.x * 0.0055 * k
+			cam_pitch = clampf(cam_pitch - d.relative.y * 0.0035 * k, -0.9, -0.05)
+			manual_cam_t = 2.0
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.device == InputEvent.DEVICE_ID_EMULATION:
@@ -709,6 +787,20 @@ func _process(delta: float) -> void:
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): kx -= 1.0
 		if Input.is_physical_key_pressed(KEY_Q): cam_yaw += delta * 1.8; manual_cam_t = 2.5
 		if Input.is_physical_key_pressed(KEY_E): cam_yaw -= delta * 1.8; manual_cam_t = 2.5
+	# joystick: ölü bölge, yumuşak tepki, ekranda hep görünür
+	var jr := joy_raw
+	var jl := jr.length()
+	if jl < 0.15:
+		jr = Vector2.ZERO
+	else:
+		jr = jr / jl * clampf((jl - 0.15) / 0.75, 0.0, 1.0)
+	joy_v = joy_v.lerp(jr, minf(1.0, delta * 18.0))
+	if is_touch or joy_id != -1:
+		var vsz := get_viewport().get_visible_rect().size
+		var home := Vector2(150.0, vsz.y - 150.0)
+		if joy_id == -1:
+			joy_o = joy_o.lerp(home, minf(1.0, delta * 8.0)) if joy_o != Vector2.ZERO else home
+		hud.set_joy(true, joy_o, joy_v, joy_id != -1)
 	var fwd := -Vector3(sin(cam_yaw), 0, cos(cam_yaw))
 	var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
 	var f_in := kz - joy_v.y
@@ -720,14 +812,20 @@ func _process(delta: float) -> void:
 
 	manual_cam_t -= delta
 	if manual_cam_t <= 0.0 and player.moving and f_in > 0.4 and play.is_empty():
-		cam_yaw = lerp_angle(cam_yaw, player.facing + PI, minf(1.0, delta * 1.3))
+		cam_yaw = lerp_angle(cam_yaw, player.facing + PI, minf(1.0, delta * 0.9))
 	var target := player.global_position + Vector3(0, 1.5, 0)
-	pivot.global_position = pivot.global_position.lerp(target, minf(1.0, delta * 10.0))
+	var pp := pivot.global_position
+	pp.x = lerpf(pp.x, target.x, minf(1.0, delta * 12.0))
+	pp.z = lerpf(pp.z, target.z, minf(1.0, delta * 12.0))
+	pp.y = lerpf(pp.y, target.y, minf(1.0, delta * 3.0))
+	pivot.global_position = pp
 	pivot.rotation = Vector3(cam_pitch, cam_yaw, 0)
 
 	var best = null
 	var bd := 2.4
 	var ppos := Vector2(player.position.x, player.position.z)
+	if pet_node:
+		pet_node.tick(delta, player.global_position, t)
 	for a in animals:
 		var d: float = Vector2(a.position.x - player.position.x, a.position.z - player.position.z).length()
 		var vis: bool = d < 75.0 or a.mode != "" or a.greet
