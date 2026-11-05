@@ -1,0 +1,4 @@
+.godot/
+*.keystore
+imza/
+key.pem
