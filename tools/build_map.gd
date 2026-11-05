@@ -286,6 +286,27 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 				var px := cx + ux * e * (w / 2.0 - 0.18)
 				var pz := cz + uz * e * (w / 2.0 - 0.18)
 				g.box(0.36, h - gf, d + 0.16, px, gf, pz, trim, ry)
+		# Galata/Karaköy/İstiklal: pencere alınlıkları, diş sırası, ana giriş çerçevesi
+		if st.get("ornate", false) and kind != "ahsap" and floors >= 2:
+			var fw2 := w - 0.04
+			var reps2 := maxf(1.0, roundf(fw2 / 2.6))
+			var mw2 := fw2 / reps2
+			var orn := C("#efe6d4") if kind == "tugla" else shade(col, 1.12)
+			orn.a = 1.0
+			for fl2 in floors - 1:
+				var ytop2 := h - fl2 * fh
+				for q2 in int(reps2):
+					var cu2 := -fw2 / 2.0 + (q2 + 0.5) * mw2
+					var ox := fx + ux * cu2 + nx * 0.08
+					var oz := fz + uz * cu2 + nz * 0.08
+					g.box(mw2 * 0.62, 0.14, 0.2, ox, ytop2 - 0.11 * fh + 0.02, oz, orn, ry)
+					if fl2 == 0 or rng.randf() < 0.3:
+						g.put("pyr", Vector3(ox, ytop2 - 0.11 * fh + 0.16, oz), orn, ry, Vector3(mw2 * 0.6, 0.32, 0.16))
+					g.box(mw2 * 0.56, 0.1, 0.16, ox, ytop2 - 0.84 * fh - 0.1, oz, orn, ry)
+			var dn := int(fw2 / 0.45)
+			for q3 in dn:
+				var du := -fw2 / 2.0 + (q3 + 0.5) * fw2 / dn
+				g.box(0.16, 0.18, 0.22, fx + ux * du + nx * 0.1, h - 0.36, fz + uz * du + nz * 0.1, orn, ry)
 		# pencere kanatları (ahşap evler) ve çiçekli pencere önleri
 		if kind == "ahsap" or rng.randf() < 0.25:
 			var fw := w - 0.04
@@ -864,6 +885,7 @@ func build_specials() -> void:
 	dome(fx, 4.7, fz, 3.2, 0.8, 0.0, C("#4f8a6a"))
 	add_col(fx - 3.2, fx + 3.2, fz - 3.2, fz + 3.2)
 	big_label("Hipodrom", Vector3(hx, 24, 240), 100)
+	player_home(hx0 + 14.5, 240.0)
 	for zt in range(int(hz0) + 6, int(hz1) - 4, 14):
 		tree(hx0 + 5, zt, "plane", 1.0)
 		tree(hx1 - 5, zt + 7, "plane", 1.0)
@@ -880,8 +902,8 @@ func build_specials() -> void:
 	g.flush(L, mroot, "KopruIskele")
 
 func build_north() -> void:
-	var stK := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.75, "wins": ["win_a", "win_c"], "cumba": 0.2, "brick": 0.4, "balcony": 0.4}
-	var stG := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.45, "wins": ["win_a", "win_c", "win_c"], "cumba": 0.25, "brick": 0.35, "wood": 0.05, "balcony": 0.4}
+	var stK := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.75, "wins": ["win_a", "win_c"], "cumba": 0.2, "brick": 0.4, "balcony": 0.4, "ornate": true}
+	var stG := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.45, "wins": ["win_a", "win_c", "win_c"], "cumba": 0.25, "brick": 0.35, "wood": 0.05, "balcony": 0.4, "ornate": true}
 	# zemin ve kenarlar
 	g.ground(-150, 230, -265, -50, 0.0, "cobble", 4.0)
 	g.ground(-150, 230, -62, -50, 0.012, "slab", 6.0)
@@ -953,6 +975,43 @@ func build_north() -> void:
 		xx += 9.0
 	flush_chunk("KuzeyArka", 600.0)
 	add_col(-160, 120, -280, -265, 14, false)
+
+## Oyuncunun evi: iki katlı ahşap Osmanlı evi, kapı +x yönüne bakar
+var home_door := Vector3.ZERO
+func player_home(cx: float, cz: float) -> void:
+	var w := 7.0; var d := 9.0
+	var wood := C("#c98a5a"); wood.a = 0.5
+	var base := C("#d8cdb6")
+	g.wall_box(d, 3.4, w, cx, 0, cz, base, PI / 2.0, "door", d, 3.4)
+	g.wall_box(d, 3.2, w, cx, 3.4, cz, wood, PI / 2.0, "win_b", 2.6, 3.2)
+	g.box(w + 0.2, 0.2, d + 0.2, cx, 3.3, cz, C("#6e4a3a"))
+	g.wall_box(4.4, 2.6, 1.0, cx + w / 2.0 + 0.5, 3.6, cz, wood, PI / 2.0, "win_a", 2.2, 2.6)
+	g.box(w + 2.6, 0.12, d + 2.6, cx, 6.62, cz, C("#5b3a28"))
+	g.put("hip", Vector3(cx, 6.7, cz), C("#b5532f"), PI / 2.0, Vector3(d + 1.6, 2.2, w + 1.6), "roof")
+	g.box(0.55, 1.4, 0.55, cx - 1.5, 7.2, cz + 2.5, C("#9a6a52"))
+	# kapı ve saçak
+	var dx := cx + w / 2.0
+	g.box(0.12, 2.3, 1.5, dx + 0.02, 0, cz, C("#7a3a22"))
+	g.box(0.13, 0.08, 0.08, dx + 0.1, 1.1, cz + 0.45, C("#e8c060"))
+	g.box(1.4, 0.1, 2.4, dx + 0.6, 2.6, cz, C("#6e4a3a"))
+	g.box(1.6, 0.18, 2.2, dx + 0.8, 0, cz, C("#bfb39c"))
+	label("EVİN", Vector3(dx + 0.3, 3.0, cz), 70, C("#fff1c8"), C("#7a3a22"), 10, true)
+	# ön bahçe çiti ve çiçekler
+	var gx := dx + 4.0
+	for k in 15:
+		var zz := cz - 4.2 + k * 0.6
+		if absf(zz - cz) > 1.2:
+			g.box(0.08, 0.9, 0.08, gx, 0, zz, C("#f2efe9"))
+	for e: float in [-1.0, 1.0]:
+		g.box(0.06, 0.08, 3.0, gx, 0.65, cz + e * 2.7, C("#f2efe9"))
+		g.box(4.0, 0.9, 0.08, dx + 2.0, 0, cz + e * 4.5, C("#f2efe9"))
+		flower_bed(dx + 2.0, cz + e * 3.2, 3.0, 1.6)
+	g.ground(dx, gx, cz - 4.5, cz + 4.5, 0.03, "grass", 4.0)
+	tree(cx - 1.0, cz - 6.5, "plane", 0.9)
+	add_col(cx - w / 2.0, cx + w / 2.0, cz - d / 2.0, cz + d / 2.0)
+	add_col(gx - 0.1, gx + 0.1, cz - 4.5, cz - 1.2); add_col(gx - 0.1, gx + 0.1, cz + 1.2, cz + 4.5)
+	add_col(dx, gx, cz - 4.6, cz - 4.4); add_col(dx, gx, cz + 4.4, cz + 4.6)
+	home_door = Vector3(dx + 0.9, 0, cz)
 
 ## Pasaj girişi: iki taş ayak, kemer, karanlık iç, tabela. side: -1 batı cephesi (+x'e bakar), +1 doğu
 func pasaj(name: String, x: float, z: float, side: float) -> void:
@@ -1033,7 +1092,7 @@ func build_taksim(ax: float, z_top: float) -> void:
 	big_label("Taksim Meydanı", Vector3(mx, 18, mz), 120)
 
 func build_istiklal() -> void:
-	var stI := {"pal": PAL_I, "fmin": 4, "fmax": 5, "shop": 0.85, "wins": ["win_c", "win_a"], "cumba": 0.15, "brick": 0.2, "balcony": 0.5}
+	var stI := {"pal": PAL_I, "fmin": 4, "fmax": 5, "shop": 0.85, "wins": ["win_c", "win_a"], "cumba": 0.15, "brick": 0.2, "balcony": 0.5, "ornate": true}
 	var ax := VN[3]
 	var z_top := -440.0; var z_bot := -259.0
 	g.ground(120, 240, z_top, -265, 0.0, "cobble", 4.0)
@@ -1264,11 +1323,12 @@ func _init() -> void:
 		"bridge": [-7, 7, -50, 0], "pier": [40, 58, -20, 0],
 		"water": [[-260, 260, -50, 0], [237, 300, -50, 310], [230, 300, -270, -50]],
 		"start": [42.0, 240.0, -0.72],
+		"home": [home_door.x, home_door.z],
 		"tram": [[125, 8], [125, 160], [-210, 160]],
 		"tram2": [[180, -268], [180, -425]],
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
 		"animals": animals, "npcs": npc_paths,
-		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
+		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Evin", -111, 240], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
 			["Mısır Çarşısı", -90, 25], ["Sirkeci", 80, 30], ["Galata Köprüsü", 0, -25], ["Karaköy", -40, -75], ["Galata Kulesi", 45, -202], ["İstiklal", 180, -350], ["Taksim", 180, -470]]}
 	var f := FileAccess.open("res://map/istanbul.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))

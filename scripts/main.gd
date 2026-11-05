@@ -13,6 +13,11 @@ const COLOR_PRICE := 50
 const CLOTH_COLS := ["#c8423a", "#e2a33b", "#2f7d6d", "#3b6aa8", "#8e3b5a", "#f2efe9", "#2b2b2b", "#d98aa0", "#6b4f3a", "#5a7f3b", "#7cc6ea", "#9a5ac8"]
 const HAIR_COLS := ["#2b2320", "#5a3a28", "#8a5a32", "#c9a46a", "#e8d8a8", "#b8442a", "#8a8a8a", "#1a1a1a", "#d98aa0", "#3b6aa8"]
 var pet_node = null
+const HOME_IN := Vector3(1000, 0, 1000)
+const HomeScript := preload("res://scripts/home.gd")
+var home_node = null
+var in_home := false
+var idle_home_t := 0.0
 const PLAY_REWARD := 20
 
 var font: Font
@@ -87,6 +92,9 @@ func _ready() -> void:
 	_make_animals()
 	_spawn_pet()
 	_apply_player_colors()
+	home_node = HomeScript.new()
+	add_child(home_node)
+	home_node.build(HOME_IN)
 
 	hud = HudScript.new()
 	add_child(hud)
@@ -261,6 +269,13 @@ func _debug_shots() -> void:
 		if a.begins_with("--far="):
 			var q := a.substr(6).split(",")
 			cam_pitch = float(q[0]); spring.spring_length = float(q[1])
+		if a == "--home":
+			_enter_home()
+		if a.begins_with("--homecam="):
+			var r := a.substr(10).split(",")
+			player.position = home_node.position + Vector3(float(r[0]), 0.1, float(r[1]))
+			cam_yaw = float(r[2]); cam_pitch = float(r[3]); spring.spring_length = float(r[4])
+			pivot.global_position = player.position + Vector3(0, 1.5, 0)
 	if shot == "":
 		return
 	await get_tree().create_timer(3.0).timeout
@@ -341,6 +356,54 @@ func _pet_items() -> Array:
 			items.append({"id": "pet:" + key, "title": "Sahiplen: " + str(tbl[k].name), "sub": "Kedi" if cat else "Köpek",
 				"price": "%d puan" % int(tbl[k].price), "enabled": int(D.pts) >= int(tbl[k].price)})
 	return items
+
+# --- ev ---
+func _enter_home() -> void:
+	in_home = true
+	player.position = home_node.door_pos
+	player.facing = -PI / 2.0
+	cam_yaw = PI / 2.0
+	spring.spring_length = 3.6
+	pivot.global_position = player.position + Vector3(0, 1.5, 0)
+	if pet_node:
+		pet_node.position = player.position + Vector3(-1.2, 0, 0.8)
+		pet_node.mode = "follow"
+	hud.show_place("Evin")
+	last_place = "Evin"
+
+func _exit_home() -> void:
+	in_home = false
+	player.position = Vector3(MAP.home[0] + 1.2, 0, MAP.home[1])
+	player.facing = PI / 2.0
+	cam_yaw = -PI / 2.0
+	spring.spring_length = 5.5
+	pivot.global_position = player.position + Vector3(0, 1.5, 0)
+	if pet_node:
+		pet_node.position = player.position + Vector3(1.0, 0, 1.0)
+		pet_node.mode = "follow"
+
+func _love_pet() -> void:
+	if pet_node == null:
+		return
+	pet_node.mode = "follow"
+	pet_node.happy = 3.0
+	idle_home_t = 0.0
+	player.act("interact-right")
+	hud.toast("%s mutlulukla sana sokuldu" % pet_node.animal_name, 2.0)
+
+func _tick_home(delta: float) -> void:
+	if not in_home or pet_node == null:
+		return
+	if player.moving:
+		idle_home_t = 0.0
+		if pet_node.mode == "go":
+			pet_node.mode = "follow"
+	else:
+		idle_home_t += delta
+		if idle_home_t > 6.0 and pet_node.mode == "follow":
+			# dost minderine gidip kıvrılır
+			pet_node.goal = home_node.pet_bed
+			pet_node.mode = "go"
 
 func _apply_player_colors() -> void:
 	var cur: Dictionary = D.get("cols", {})
@@ -511,6 +574,15 @@ func _update_actions() -> void:
 			{"id": "play", "label": ("Lazerle oyna" if a2.cat else "Top oyna") if a2.friend > 0 else "Oyna (önce besle)", "enabled": a2.friend > 0, "color": Color("#c8e6b0")},
 			{"id": "treat", "label": "Ödül maması (%d)" % int(D.treats), "enabled": int(D.treats) > 0 and not treated, "color": Color("#f2b8c6")}])
 		return
+	if in_home:
+		var acts := [{"id": "home_out", "label": "Dışarı çık", "enabled": true, "color": Color("#e9e4d6")}]
+		if pet_node:
+			acts.push_front({"id": "pet_love", "label": "%s'i sev" % pet_node.animal_name, "enabled": true, "color": Color("#f2b8c6")})
+		hud.show_actions("Evin", "Dostunla baş başa. Bir süre durursan minderine gidip uyur." if pet_node else "Mağazadan bir dost sahiplenirsen burada seninle yaşar.", acts)
+		return
+	if MAP.has("home") and Vector2(player.position.x - MAP.home[0], player.position.z - MAP.home[1]).length() < 2.6:
+		hud.show_actions("Evin", "Kendi evin ve dostunun köşesi.", [{"id": "home_in", "label": "Eve gir", "enabled": true, "color": Color("#f6c445")}])
+		return
 	if _on_bridge_rail():
 		hud.show_actions("Galata Köprüsü", "Balıklar yem bekliyor. Bugünkü yem: %d" % int(D.bait),
 			[{"id": "fish", "label": "Balıklara yem at", "enabled": int(D.bait) > 0 and fish_cd <= 0.0, "color": Color("#9fd6ef")}])
@@ -526,6 +598,9 @@ func _on_action(id: String) -> void:
 		"throw": _throw_ball()
 		"end": _end_play(false)
 		"fish": _feed_fish()
+		"home_in": _enter_home()
+		"home_out": _exit_home()
+		"pet_love": _love_pet()
 
 func _on_buy(id: String) -> void:
 	if id == "look":
@@ -864,6 +939,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		manual_cam_t = 2.5
 
 func _place_at(x: float, z: float) -> String:
+	if in_home:
+		return "Evin"
 	var best := ""
 	var best_area := 1e12
 	for p in MAP.roads + MAP.areas:
@@ -923,6 +1000,7 @@ func _process(delta: float) -> void:
 	var bd := 2.4
 	var ppos := Vector2(player.position.x, player.position.z)
 	_tick_pigeons(delta)
+	_tick_home(delta)
 	if pet_node:
 		pet_node.tick(delta, player.global_position, t)
 	for a in animals:
@@ -962,7 +1040,7 @@ func _process(delta: float) -> void:
 		var dots := []
 		for a in animals:
 			dots.append([a.position.x, a.position.z, Color("#d9573a") if a.friend > 0 else Color(0.35, 0.38, 0.36, 0.8)])
-		hud.update_map(ppos, player.facing, dots)
+		hud.update_map(Vector2(MAP.home[0], MAP.home[1]) if in_home else ppos, player.facing, dots)
 
 func _update_movers(delta: float) -> void:
 	# T1 tramvayı: yol boyunca ileri geri

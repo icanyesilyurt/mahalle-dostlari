@@ -322,7 +322,7 @@ func _build_dog(sph: SphereMesh) -> void:
 		c.rotation.x = PI / 2.0
 
 func _cat_pose(delta: float, moving: bool, t: float, wag_on: bool, flat: Vector3) -> void:
-	var resting := not moving and mode == "" and not greet and eat_t <= 0.0
+	var resting := not moving and (mode == "" or mode == "go") and not greet and eat_t <= 0.0
 	pose_t -= delta
 	if not resting:
 		if moving and pose != "stand":
@@ -430,6 +430,8 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 		greet = false
 		if mode == "go":
 			moving = _step_to(goal, 7.0 if not cat else 5.5, 0.35, delta) > 0.4
+			if not moving and id == "pet" and cat:
+				pose = "loaf"; pose_t = 30.0
 		elif mode == "chase":
 			var d := _step_to(goal, 6.0, 0.25, delta)
 			moving = d > 0.3
