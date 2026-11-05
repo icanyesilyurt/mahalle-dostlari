@@ -192,6 +192,7 @@ func _debug_shots() -> void:
 # --- oyuncu ve kamera ---
 func _make_player() -> void:
 	player = PlayerScript.new()
+	player.look = str(D.get("ch", "character-male-a"))
 	var st: Array = MAP.start
 	player.position = Vector3(st[0], 0.1, st[1])
 	add_child(player)
@@ -324,7 +325,8 @@ func _sync_hud() -> void:
 	hud.set_book(entries, met, animals.size())
 	hud.set_shop([
 		{"id": "treat", "title": "Ödül maması", "sub": "Oyundan sonra ver. Dostluğunu bir kat artırır.", "price": "%d puan" % TREAT_PRICE, "enabled": int(D.pts) >= TREAT_PRICE},
-		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4}])
+		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4},
+		{"id": "look", "title": "Görünüşünü değiştir", "sub": "12 karakterden sıradakine geç. Kıyafet renkleri yakında.", "price": "Ücretsiz", "enabled": true}])
 
 # --- eylem kartı ---
 func _on_bridge_rail() -> bool:
@@ -371,6 +373,13 @@ func _on_action(id: String) -> void:
 		"fish": _feed_fish()
 
 func _on_buy(id: String) -> void:
+	if id == "look":
+		var looks: Array = NpcScript.LOOKS
+		var i := (looks.find(player.look) + 1) % looks.size()
+		player.set_look(looks[i])
+		D.ch = looks[i]
+		_save()
+		return
 	var n := 1 if id == "treat" else 5
 	var price := TREAT_PRICE if id == "treat" else TREAT_PRICE * 4
 	if int(D.pts) < price:
@@ -392,6 +401,8 @@ func _on_feed() -> void:
 	near.hungry = false
 	_rec(near, "fd")
 	near.happy = 1.6
+	near.eat(3.0)
+	player.act("interact-right")
 	hud.toast("%s seni artık tanıyor" % near.animal_name if near.friend == 1 else "+10 puan", 1.8)
 	near.refresh()
 	_save(); _sync_hud()
@@ -406,6 +417,8 @@ func _on_water() -> void:
 	near.thirsty = false
 	_rec(near, "wd")
 	near.happy = 1.6
+	near.eat(2.2)
+	player.act("interact-right")
 	hud.toast("Teşekkürler!", 1.2)
 	near.refresh()
 	_save(); _sync_hud()
@@ -416,6 +429,8 @@ func _give_treat() -> void:
 	D.treats = int(D.treats) - 1
 	_rec(near, "td")
 	near.happy = 3.0
+	near.eat(2.0)
+	player.act("pick-up")
 	_hearts(near.global_position + Vector3(0, near.top_y, 0))
 	hud.toast("%s bayıldı! Dostluğunuz arttı" % near.animal_name, 2.4)
 	near.refresh()
@@ -740,7 +755,8 @@ func _process(delta: float) -> void:
 	_update_movers(delta)
 	for npc in npcs:
 		var dn: float = Vector2(npc.position.x, npc.position.z).distance_to(ppos)
-		npc.visible = dn < 70.0
+		if (dn < 70.0) != npc.visible:
+			npc.set_active(dn < 70.0)
 		if dn < 90.0:
 			npc.tick(delta)
 	map_t -= delta

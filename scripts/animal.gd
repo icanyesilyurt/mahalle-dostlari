@@ -60,56 +60,23 @@ func _part(parent: Node3D, size: Vector3, pos: Vector3, m: Material, mesh: Mesh 
 	parent.add_child(mi)
 	return mi
 
+const DOG_SCALE := 0.27
+var anim: AnimationPlayer
+var wag: Node
+var eat_t := 0.0
+var cur_anim := ""
+
 func build() -> void:
 	ph = randf() * 6.0
 	wt = randf() * 4.0
 	target = home
 	position = home
-	var m := _mat(color)
-	var light := _mat(color.lightened(0.25))
-	var dk := _mat(Color("#2a2623"))
-	var pk := _mat(Color("#f0a3a8"))
-	var ear := _mat(color.darkened(0.25))
-	var sph := SphereMesh.new(); sph.radius = 1.0; sph.height = 2.0; sph.radial_segments = 10; sph.rings = 6
+	var sph := SphereMesh.new(); sph.radius = 1.0; sph.height = 2.0; sph.radial_segments = 16; sph.rings = 8
 	if cat:
-		top_y = 1.25
-		var body := _part(self, Vector3(0.2, 0.17, 0.36), Vector3(0, 0.36, 0), m, sph)
-		body.rotation.x = 0.05
-		_part(self, Vector3(0.14, 0.11, 0.22), Vector3(0, 0.33, 0.06), light, sph)
-		head = Node3D.new(); head.position = Vector3(0, 0.6, 0.36); add_child(head)
-		_part(head, Vector3(0.19, 0.16, 0.17), Vector3.ZERO, m, sph)
-		_part(head, Vector3(0.09, 0.06, 0.06), Vector3(0, -0.05, 0.12), light, sph)
-		var cone := CylinderMesh.new(); cone.top_radius = 0.0; cone.bottom_radius = 1.0; cone.height = 1.0; cone.radial_segments = 4
-		for sx in [-1.0, 1.0]:
-			var e := _part(head, Vector3(0.07, 0.14, 0.05), Vector3(0.1 * sx, 0.17, -0.01), m, cone)
-			e.rotation.z = -0.3 * sx
-			_part(head, Vector3(0.028, 0.034, 0.02), Vector3(0.075 * sx, 0.03, 0.15), _mat(Color("#8fbf5a")), sph)
-			_part(head, Vector3(0.012, 0.03, 0.01), Vector3(0.075 * sx, 0.03, 0.168), dk)
-		_part(head, Vector3(0.03, 0.02, 0.02), Vector3(0, -0.03, 0.17), pk, sph)
-		for p: Vector2 in [Vector2(-0.09, 0.2), Vector2(0.09, 0.2), Vector2(-0.09, -0.2), Vector2(0.09, -0.2)]:
-			legs.append(_part(self, Vector3(0.07, 0.26, 0.07), Vector3(p.x, 0.13, p.y), m))
-		tail = Node3D.new(); tail.position = Vector3(0, 0.45, -0.32); add_child(tail)
-		var t := _part(tail, Vector3(0.06, 0.06, 0.5), Vector3(0, 0.15, -0.18), m)
-		t.rotation.x = -0.75
+		_build_cat(sph)
 	else:
-		top_y = 1.6
-		_part(self, Vector3(0.25, 0.24, 0.48), Vector3(0, 0.6, 0), m, sph)
-		_part(self, Vector3(0.18, 0.15, 0.3), Vector3(0, 0.52, 0.12), light, sph)
-		head = Node3D.new(); head.position = Vector3(0, 0.92, 0.48); add_child(head)
-		_part(head, Vector3(0.2, 0.2, 0.2), Vector3.ZERO, m, sph)
-		_part(head, Vector3(0.12, 0.1, 0.16), Vector3(0, -0.06, 0.2), light, sph)
-		_part(head, Vector3(0.05, 0.04, 0.04), Vector3(0, -0.03, 0.35), dk, sph)
-		for sx in [-1.0, 1.0]:
-			_part(head, Vector3(0.03, 0.035, 0.02), Vector3(0.09 * sx, 0.06, 0.18), dk, sph)
-			var e2 := _part(head, Vector3(0.09, 0.22, 0.16), Vector3(0.19 * sx, 0.0, -0.03), ear)
-			e2.rotation.z = 0.2 * sx
-		for p: Vector2 in [Vector2(-0.13, 0.28), Vector2(0.13, 0.28), Vector2(-0.13, -0.28), Vector2(0.13, -0.28)]:
-			legs.append(_part(self, Vector3(0.11, 0.42, 0.11), Vector3(p.x, 0.21, p.y), m))
-		tail = Node3D.new(); tail.position = Vector3(0, 0.74, -0.44); add_child(tail)
-		var t2 := _part(tail, Vector3(0.08, 0.08, 0.42), Vector3(0, 0.12, -0.15), m)
-		t2.rotation.x = -0.8
+		_build_dog(sph)
 
-	_decorate(sph)
 	bowl = Node3D.new(); bowl.position = Vector3(-0.2, top_y, 0); add_child(bowl)
 	var cyl := CylinderMesh.new(); cyl.top_radius = 1.0; cyl.bottom_radius = 0.7; cyl.height = 1.0; cyl.radial_segments = 16
 	_part(bowl, Vector3(0.2, 0.1, 0.2), Vector3.ZERO, _mat(Color("#f6c445"), true), cyl)
@@ -133,41 +100,132 @@ func build() -> void:
 	scale = Vector3.ONE * size
 	refresh()
 
-## Desenler: tekir çizgileri, smokin göğüs ve patiler, üç renkli lekeler, benekler, küpe ve tasma
+## Kedi: tombul, büyük kafalı, yuvarlak hatlı (prosedürel)
+func _build_cat(sph: SphereMesh) -> void:
+	top_y = 1.15
+	var m := _mat(color)
+	var light := _mat(color.lightened(0.3))
+	var dk := _mat(Color("#2a2623"))
+	var pk := _mat(Color("#f2a0a8"))
+	var eye := _mat(Color(["#9ccf5a", "#e8b53a", "#6fb3d6", "#c9a03a"][randi() % 4]))
+	var shine := _mat(Color.WHITE, true)
+	var body := _part(self, Vector3(0.17, 0.155, 0.27), Vector3(0, 0.3, -0.02), m, sph)
+	body.rotation.x = -0.08
+	_part(self, Vector3(0.12, 0.12, 0.17), Vector3(0, 0.27, 0.06), light, sph)
+	head = Node3D.new(); head.position = Vector3(0, 0.52, 0.22); add_child(head)
+	_part(head, Vector3(0.175, 0.155, 0.16), Vector3.ZERO, m, sph)
+	# yanaklar ve ağız bölgesi
+	for sx in [-1.0, 1.0]:
+		_part(head, Vector3(0.06, 0.05, 0.05), Vector3(0.04 * sx, -0.06, 0.12), light, sph)
+	_part(head, Vector3(0.022, 0.016, 0.015), Vector3(0, -0.03, 0.155), pk, sph)
+	var cone := CylinderMesh.new(); cone.top_radius = 0.0; cone.bottom_radius = 1.0; cone.height = 1.0; cone.radial_segments = 8
+	for sx in [-1.0, 1.0]:
+		var e := _part(head, Vector3(0.065, 0.12, 0.04), Vector3(0.095 * sx, 0.15, -0.01), m, cone)
+		e.rotation.z = -0.32 * sx
+		var ei := _part(head, Vector3(0.035, 0.07, 0.02), Vector3(0.093 * sx, 0.14, 0.012), pk, cone)
+		ei.rotation.z = -0.32 * sx
+		_part(head, Vector3(0.042, 0.048, 0.025), Vector3(0.07 * sx, 0.02, 0.132), eye, sph)
+		_part(head, Vector3(0.024, 0.04, 0.01), Vector3(0.07 * sx, 0.02, 0.152), dk, sph)
+		_part(head, Vector3(0.01, 0.01, 0.006), Vector3(0.078 * sx, 0.035, 0.16), shine, sph)
+	# yumuşak patiler
+	for p: Vector2 in [Vector2(-0.075, 0.13), Vector2(0.075, 0.13), Vector2(-0.075, -0.15), Vector2(0.075, -0.15)]:
+		var leg := Node3D.new(); leg.position = Vector3(p.x, 0.24, p.y); add_child(leg)
+		_part(leg, Vector3(0.045, 0.12, 0.045), Vector3(0, -0.12, 0), m, sph)
+		_part(leg, Vector3(0.05, 0.035, 0.06), Vector3(0, -0.21, 0.015), m, sph)
+		legs.append(leg)
+	# kıvrık kuyruk: dört boğum
+	tail = Node3D.new(); tail.position = Vector3(0, 0.36, -0.26); add_child(tail)
+	var seg: Node3D = tail
+	var bend := [-0.9, -0.35, -0.3, -0.25]
+	for k in 4:
+		var j := Node3D.new(); j.rotation.x = bend[k]; seg.add_child(j)
+		if k > 0:
+			j.position = Vector3(0, 0, -0.1)
+		_part(j, Vector3(0.035 - k * 0.003, 0.035 - k * 0.003, 0.07), Vector3(0, 0, -0.05), m, sph)
+		seg = j
+	_decorate(sph)
+
+## Köpek: Quaternius animasyonlu model, renkleri tek tek boyanır
+func _build_dog(sph: SphereMesh) -> void:
+	top_y = 1.25
+	var big := size > 1.15 or color.get_luminance() < 0.25
+	var model: Node3D = (load("res://assets/animals/husky.glb" if big else "res://assets/animals/shiba.glb") as PackedScene).instantiate()
+	model.scale = Vector3.ONE * DOG_SCALE
+	add_child(model)
+	var mi := model.find_child("*", true, false)
+	for n in model.find_children("*", "MeshInstance3D", true, false):
+		mi = n
+	var mesh_i := mi as MeshInstance3D
+	var main := _mat(color)
+	var second := _mat(color2 if pattern != "solid" else color.lightened(0.35))
+	mesh_i.set_surface_override_material(0, main)
+	mesh_i.set_surface_override_material(1, second)
+	var sk := model.find_child("Skeleton3D", true, false) as Skeleton3D
+	head = BoneAttachment3D.new()
+	(head as BoneAttachment3D).bone_name = "Head"
+	sk.add_child(head)
+	wag = load("res://scripts/tail_wag.gd").new()
+	sk.add_child(wag)
+	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	for n in ["Idle", "Walk", "Gallop", "Eating", "Idle_2"]:
+		if anim.has_animation(n):
+			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
+	anim.play("Idle")
+	anim.seek(randf() * 2.0)
+	cur_anim = "Idle"
+	# kemiğe takılan parçalar için ölçek telafisi (model + iskelet + kemik ölçeği)
+	var acc := 1.0
+	var nd: Node = sk
+	while nd != null and nd != self:
+		if nd is Node3D:
+			acc *= (nd as Node3D).scale.x
+		nd = nd.get_parent()
+	var hb := sk.find_bone("Head")
+	var inv := 1.0 / (acc * sk.get_bone_global_rest(hb).basis.get_scale().x)
+	if tagged:
+		# İstanbul sokak köpeklerinin sarı kulak küpesi
+		var ear := BoneAttachment3D.new(); ear.bone_name = "Ear2.R"; sk.add_child(ear)
+		_part(ear, Vector3(0.04, 0.05, 0.015) * inv, Vector3.ZERO, _mat(Color("#f2c230")))
+	if randf() < 0.4:
+		var neck := BoneAttachment3D.new(); neck.bone_name = "Neck1"; sk.add_child(neck)
+		var tor := TorusMesh.new(); tor.inner_radius = 0.8; tor.outer_radius = 1.0; tor.rings = 16; tor.ring_segments = 6
+		var c := _part(neck, Vector3(0.13, 0.13, 0.13) * inv, Vector3.ZERO, _mat(Color(["#c8423a", "#3b6aa8", "#2f7d6d"][randi() % 3])), tor)
+		c.rotation.x = PI / 2.0
+
+func _play(n: String, blend := 0.2) -> void:
+	if anim and cur_anim != n:
+		cur_anim = n
+		anim.play(n, blend)
+
+## Mama ya da su verildiğinde biraz yesin/içsin
+func eat(sec := 2.6) -> void:
+	eat_t = sec
+
+## Kedi desenleri: tekir çizgileri, smokin göğüs ve patiler, üç renkli lekeler
 func _decorate(sph: SphereMesh) -> void:
 	var m2 := _mat(color2)
-	var dark := _mat(color.darkened(0.45))
-	if cat:
-		match pattern:
-			"tekir":
-				var sm := _mat(color2)
-				for k in 4:
-					var st := _part(self, Vector3(0.21, 0.035, 0.05), Vector3(0, 0.52, -0.15 + k * 0.1), sm)
-					st.rotation.x = 0.1
-				_part(head, Vector3(0.03, 0.03, 0.12), Vector3(0, 0.16, 0.02), sm)
-				_part(head, Vector3(0.12, 0.025, 0.03), Vector3(0, 0.12, 0.13), sm)
-			"smokin":
-				_part(self, Vector3(0.12, 0.13, 0.08), Vector3(0, 0.38, 0.17), m2, sph)
-				_part(head, Vector3(0.1, 0.07, 0.06), Vector3(0, -0.06, 0.12), m2, sph)
-				for l in legs:
-					_part(l as Node3D, Vector3(0.08, 0.07, 0.09), Vector3(0, -0.1, 0.005), m2)
-			"uc_renk":
-				_part(self, Vector3(0.12, 0.08, 0.13), Vector3(0.06, 0.48, -0.06), m2, sph)
-				_part(self, Vector3(0.1, 0.07, 0.1), Vector3(-0.07, 0.47, 0.1), _mat(Color("#2b2828")), sph)
-				_part(head, Vector3(0.1, 0.08, 0.1), Vector3(0.07, 0.07, -0.02), m2, sph)
-	else:
-		match pattern:
-			"benekli":
-				for k in 5:
-					_part(self, Vector3(0.07, 0.05, 0.07), Vector3(randf_range(-0.18, 0.18), 0.78 + randf() * 0.04, randf_range(-0.3, 0.3)), m2, sph)
-				_part(head, Vector3(0.08, 0.06, 0.08), Vector3(0.1, 0.12, 0.02), m2, sph)
-		if tagged:
-			# İstanbul sokak köpeklerinin sarı kulak küpesi
-			_part(head, Vector3(0.05, 0.07, 0.02), Vector3(0.26, -0.04, 0.03), _mat(Color("#f2c230")))
-		if randf() < 0.35:
-			_part(self, Vector3(0.28, 0.06, 0.28), Vector3(0, 0.84, 0.36), _mat(Color(["#c8423a", "#3b6aa8", "#2f7d6d"][randi() % 3])))
-	if pattern == "solid" and randf() < 0.3:
-		_part(head, Vector3(0.06, 0.05, 0.05), Vector3(0, 0.08, 0.12 if cat else 0.18), dark, sph)
+	match pattern:
+		"tekir":
+			for k in 4:
+				var st := _part(self, Vector3(0.13, 0.03, 0.035), Vector3(0, 0.44, -0.16 + k * 0.08), m2, sph)
+				st.rotation.x = 0.1
+			for k in 3:
+				_part(head, Vector3(0.012, 0.012, 0.05), Vector3(-0.03 + k * 0.03, 0.14, 0.06), m2, sph)
+		"smokin":
+			_part(self, Vector3(0.1, 0.11, 0.07), Vector3(0, 0.3, 0.17), m2, sph)
+			_part(head, Vector3(0.09, 0.06, 0.05), Vector3(0, -0.07, 0.12), m2, sph)
+			for l in legs:
+				_part(l as Node3D, Vector3(0.052, 0.037, 0.062), Vector3(0, -0.205, 0.016), m2, sph)
+		"uc_renk":
+			_part(self, Vector3(0.1, 0.07, 0.11), Vector3(0.05, 0.42, -0.08), m2, sph)
+			_part(self, Vector3(0.08, 0.06, 0.09), Vector3(-0.06, 0.41, 0.06), _mat(Color("#2b2828")), sph)
+			_part(head, Vector3(0.08, 0.07, 0.08), Vector3(0.06, 0.08, 0.0), m2, sph)
+		_:
+			if randf() < 0.3:
+				_part(head, Vector3(0.05, 0.04, 0.04), Vector3(0, 0.1, 0.1), _mat(color.darkened(0.45)), sph)
+	if randf() < 0.25:
+		var tor := TorusMesh.new(); tor.inner_radius = 0.8; tor.outer_radius = 1.0
+		_part(head, Vector3(0.09, 0.09, 0.09), Vector3(0, -0.11, -0.02), _mat(Color(["#c8423a", "#3b6aa8", "#e2a33b"][randi() % 3])), tor)
 
 func refresh() -> void:
 	name_label.text = animal_name
@@ -179,7 +237,9 @@ func refresh() -> void:
 	drop.position.x = 0.2 if both else 0.0
 
 func mouth_pos() -> Vector3:
-	return head.global_position + global_transform.basis.z * (0.3 if not cat else 0.18) + Vector3(0, -0.08, 0)
+	if cat:
+		return head.global_position + global_transform.basis.z * 0.18 + Vector3(0, -0.08, 0)
+	return head.global_position + global_transform.basis.z * 0.22 * size + Vector3(0, -0.05, 0)
 
 func _push_out(p: Vector3, r: float) -> Vector3:
 	for c in cols:
@@ -252,14 +312,28 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 	if happy > 0.0:
 		happy -= delta
 	ph += delta * (14.0 if moving else 3.0)
-	var sw := sin(ph) * 0.6 if moving else 0.0
-	for i in legs.size():
-		var sgn := 1.0 if i % 2 == 0 else -1.0
-		var front := 1.0 if i < 2 else -1.0
-		(legs[i] as Node3D).rotation.x = sw * sgn * front
-	var wag := greet or happy > 0.0 or mode != ""
-	tail.rotation.y = sin(t * (16.0 if wag else 2.5) + ph) * (0.8 if wag else 0.25)
-	head.rotation.x = sin(t * 0.7 + ph) * 0.08
+	var wag_on := greet or happy > 0.0 or mode != ""
+	if eat_t > 0.0:
+		eat_t -= delta
+	if anim:
+		if eat_t > 0.0 and not moving:
+			_play("Eating")
+		elif moving:
+			var fast := mode != "" or greet or Vector2(target.x - position.x, target.z - position.z).length() > 3.0
+			_play("Gallop" if fast else "Walk")
+		else:
+			_play("Idle")
+		wag.amount = lerpf(wag.amount, 1.0 if wag_on else 0.15, minf(1.0, delta * 5.0))
+	else:
+		var sw := sin(ph) * 0.6 if moving else 0.0
+		for i in legs.size():
+			var sgn := 1.0 if i % 2 == 0 else -1.0
+			var front := 1.0 if i < 2 else -1.0
+			(legs[i] as Node3D).rotation.x = sw * sgn * front
+		tail.rotation.y = sin(t * (14.0 if wag_on else 2.0) + ph) * (0.7 if wag_on else 0.25)
+		head.rotation.x = sin(t * 0.7 + ph) * 0.08
+		if eat_t > 0.0 and not moving:
+			head.rotation.x = 0.45 + sin(t * 9.0) * 0.08
 	var bob := sin(t * 3.0 + ph) * 0.05
 	bowl.position.y = top_y + bob
 	drop.position.y = top_y + bob

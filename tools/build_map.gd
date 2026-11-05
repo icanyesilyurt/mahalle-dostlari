@@ -28,6 +28,8 @@ const PAL_I := ["#e8d9c4", "#d4c1a6", "#f0e4cf", "#c9b59a", "#e3c9b8", "#d9d2c3"
 const ROOF := ["#b4573d", "#a24a34", "#9a5a44", "#b9623f"]
 const AWN := ["#c8423a", "#2f7d6d", "#e2a33b", "#3b6aa8", "#8e3b5a"]
 const LEAD := "#8e989c"
+const WOODC := ["#8a5a3c", "#a8714a", "#7a4f36", "#c9a27a", "#d8b48a", "#b9c4a8", "#d9a891", "#e2cfa0", "#9fb3bf"]
+const BRICK := ["#a5543a", "#b8674a", "#9a4b35", "#b5725a", "#8f4a38"]
 
 # Yarımada ızgarası (plan 01-12)
 const V := [-215.0, -130.0, -45.0, 40.0, 125.0, 210.0]       # 07..12
@@ -184,6 +186,17 @@ func bench(x: float, z: float, ry: float = 0.0) -> void:
 		var q: Vector3 = Vector3(x, 0, z) + fw * sx
 		g.box(0.08, 0.45, 0.5, q.x, 0, q.z, C("#2e3236"), ry)
 
+## Dar sokağın iki yakası arasında çamaşır ipi (z boyunca uzanır)
+func laundry(x: float, za: float, zb: float, y: float = 5.6) -> void:
+	var L := zb - za
+	g.box(0.04, 0.04, L, x, y, (za + zb) / 2.0, C("#3a3633"))
+	var n := int(L / 1.1)
+	for i in n:
+		if rng.randf() < 0.75:
+			var z := za + 0.7 + i * (L - 1.4) / maxf(1.0, n - 1)
+			var hh := 0.5 + rng.randf() * 0.4
+			g.box(0.04, hh, 0.55 + rng.randf() * 0.3, x, y - hh, z, pick(["#f2efe9", "#c8423a", "#3b6aa8", "#e2a33b", "#8fbf5a", "#d98aa0", "#f2efe9", "#6fb3d6"]))
+
 func flower_pot(x: float, z: float) -> void:
 	g.put("cyl8", Vector3(x, 0.3, z), C("#b5643c"), 0, Vector3(0.3, 0.6, 0.3))
 	g.put("ico", Vector3(x, 0.8, z), C("#5f8f45"), rng.randf(), Vector3(0.4, 0.35, 0.4))
@@ -214,23 +227,75 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 		var cx := ax + ux * mid - nx * d / 2.0
 		var cz := az + uz * mid - nz * d / 2.0
 		var col := pick(st.pal)
+		var kind := "siva"
+		var r := rng.randf()
+		if r < st.get("wood", 0.0) and floors <= 4:
+			kind = "ahsap"
+			col = pick(WOODC); col.a = 0.5
+		elif r < st.get("wood", 0.0) + st.get("brick", 0.0):
+			kind = "tugla"
+			col = pick(BRICK); col.a = 0.25
 		var shop: bool = rng.randf() < st.shop
 		var wk: String = st.wins[rng.randi() % st.wins.size()]
-		g.wall_box(w - 0.04, gf, d, cx, 0, cz, shade(col, 0.93), ry, "shop" if shop else "door", 4.2 if shop else w, gf)
+		var gcol := shade(col, 0.93)
+		if kind == "ahsap":
+			gcol = pick(["#cfc3ad", "#bfb39c", "#d8cdb6"]); gcol.a = 1.0
+		g.wall_box(w - 0.04, gf, d, cx, 0, cz, gcol, ry, "shop" if shop else "door", 4.2 if shop else w, gf)
 		g.wall_box(w - 0.04, h - gf, d, cx, gf, cz, col, ry, wk, 2.6, fh)
-		g.box(w + 0.25, 0.3, d + 0.25, cx, h - 0.15, cz, shade(col, 0.74), ry)
-		g.put("hip" if w > d else "pyr", Vector3(cx, h + 0.1, cz), pick(ROOF), ry, Vector3(w + 0.5, 1.4 + rng.randf() * 0.5, d + 0.5), "roof")
+		var trim := shade(col, 0.74) if kind != "tugla" else C("#d8cfc0")
+		trim.a = 1.0
+		# kat silmesi ve köşe pilastrları
+		g.box(w + 0.02, 0.2, d + 0.24, cx, gf - 0.1, cz, trim, ry)
+		var fx := ax + ux * mid
+		var fz := az + uz * mid
+		if w > 4.5:
+			for e: float in [-1.0, 1.0]:
+				var px := cx + ux * e * (w / 2.0 - 0.18)
+				var pz := cz + uz * e * (w / 2.0 - 0.18)
+				g.box(0.36, h - gf, d + 0.16, px, gf, pz, trim, ry)
+		var eave := 1.3 if kind == "ahsap" else 0.5
+		g.box(w + 0.25, 0.3, d + 0.25, cx, h - 0.15, cz, trim, ry)
+		if kind == "ahsap":
+			g.box(w + eave * 2.0, 0.12, d + eave * 2.0, cx, h + 0.02, cz, C("#5b3a28"), ry)
+		g.put("hip" if w > d else "pyr", Vector3(cx, h + 0.1, cz), pick(ROOF), ry, Vector3(w + eave, 1.4 + rng.randf() * 0.5, d + eave), "roof")
+		if rng.randf() < 0.45:
+			var off := (rng.randf() - 0.5) * w * 0.5
+			g.box(0.55, 1.6, 0.55, cx + ux * off - nx * d * 0.15, h + 0.4, cz + uz * off - nz * d * 0.15, C("#9a6a52"), ry)
+			g.box(0.7, 0.12, 0.7, cx + ux * off - nx * d * 0.15, h + 2.0, cz + uz * off - nz * d * 0.15, C("#6e4a3a"), ry)
+		if kind != "ahsap" and floors >= 2 and rng.randf() < 0.18:
+			# klima dış ünitesi
+			var k: int = rng.randi_range(1, floors - 1)
+			var off2 := (rng.randf() - 0.5) * (w - 2.0)
+			g.box(0.8, 0.55, 0.35, fx + ux * off2 + nx * 0.18, gf + (k - 1) * fh + 0.15, fz + uz * off2 + nz * 0.18, C("#e9e7e1"), ry)
+		if shop:
+			# dükkân tabelası
+			g.box(minf(w * 0.7, 4.0), 0.55, 0.12, fx + nx * 0.08, gf - 0.75, fz + nz * 0.08, pick(AWN), ry)
 		if shop and rng.randf() < 0.6:
 			var tx := ax + ux * mid + nx * 0.85
 			var tz := az + uz * mid + nz * 0.85
 			g.put("box", Vector3(tx, gf - 0.55, tz), pick(AWN), ry, Vector3(w * 0.9, 0.08, 1.7), "plain", -0.25 if nz != 0 else 0.0, 0.0 if nz != 0 else (0.25 * nx))
-		if floors >= 3 and rng.randf() < st.cumba:
+		if floors >= 3 and rng.randf() < st.cumba + (0.35 if kind == "ahsap" else 0.0):
 			var cw := minf(w * 0.62, 4.2)
 			var cd := 1.1
 			var kx := ax + ux * mid + nx * cd / 2.0
 			var kz := az + uz * mid + nz * cd / 2.0
 			g.wall_box(cw, fh * 1.8, cd, kx, gf + 0.2, kz, shade(col, 0.95), ry, "win_a", cw / 2.0, fh * 0.9)
-			g.box(cw + 0.2, 0.2, cd + 0.2, kx, gf + 0.2 + fh * 1.8, kz, shade(col, 0.72), ry)
+			g.box(cw + 0.2, 0.2, cd + 0.2, kx, gf + 0.2 + fh * 1.8, kz, trim, ry)
+			# cumba altı payandaları
+			for e2: float in [-1.0, 1.0]:
+				g.put("box", Vector3(kx + ux * e2 * cw * 0.4, gf - 0.2, kz + uz * e2 * cw * 0.4), trim, ry, Vector3(0.15, 0.6, cd * 0.8), "plain", -0.5 * absf(nz) * signf(nz), 0.5 * absf(nx) * signf(nx))
+		elif kind != "ahsap" and floors >= 3 and rng.randf() < st.get("balcony", 0.2):
+			# demir korkuluklu balkon
+			var bw := minf(w * 0.5, 3.0)
+			for k2 in range(1, floors):
+				if rng.randf() < 0.6:
+					var by := gf + (k2 - 1) * fh + 0.05
+					g.box(bw, 0.12, 0.8, fx + nx * 0.4, by, fz + nz * 0.4, trim, ry)
+					g.box(bw, 0.06, 0.06, fx + nx * 0.78, by + 0.95, fz + nz * 0.78, C("#2c2b2a"), ry)
+					var nb := int(bw / 0.25)
+					for q in nb:
+						var o := -bw / 2.0 + (q + 0.5) * bw / nb
+						g.box(0.03, 0.9, 0.03, fx + ux * o + nx * 0.78, by + 0.05, fz + uz * o + nz * 0.78, C("#2c2b2a"))
 		if rng.randf() < 0.08:
 			flower_pot(ax + ux * (mid + w * 0.3) + nx * 0.45, az + uz * (mid + w * 0.3) + nz * 0.45)
 		s += w
@@ -551,8 +616,8 @@ func pen_cell(c: int, b: int) -> Array:
 	return [V[c] + VW[c], V[c + 1] - VW[c + 1], H[b] + HW[b], H[b + 1] - HW[b + 1]]
 
 func build_peninsula() -> void:
-	var stS := {"pal": PAL_S, "fmin": 2, "fmax": 4, "shop": 0.35, "wins": ["win_a", "win_b"], "cumba": 0.5}
-	var stMain := {"pal": PAL_S, "fmin": 3, "fmax": 4, "shop": 0.7, "wins": ["win_a", "win_b", "win_c"], "cumba": 0.35}
+	var stS := {"pal": PAL_S, "fmin": 2, "fmax": 4, "shop": 0.35, "wins": ["win_a", "win_b"], "cumba": 0.5, "wood": 0.4, "brick": 0.03}
+	var stMain := {"pal": PAL_S, "fmin": 3, "fmax": 4, "shop": 0.7, "wins": ["win_a", "win_b", "win_c"], "cumba": 0.35, "wood": 0.15, "brick": 0.05}
 	# ana yollar
 	for i in H.size():
 		var x1 := 235.0
@@ -588,6 +653,12 @@ func build_peninsula() -> void:
 				block(x0, x1, z0, s1 - sw, st)
 				block(x0, x1, s1 + sw, s2 - sw, st)
 				block(x0, x1, s2 + sw, z1, st)
+				for sc: float in [s1, s2]:
+					var lx := x0 + 9.0
+					while lx < x1 - 9.0:
+						if rng.randf() < 0.45:
+							laundry(lx, sc - sw - 1.4, sc + sw + 1.4)
+						lx += 13.0 + rng.randf() * 6.0
 			else:
 				block(x0, x1, z0, z1, st)
 			chunk_cells[key] = true
@@ -736,8 +807,8 @@ func build_specials() -> void:
 	g.flush(L, mroot, "KopruIskele")
 
 func build_north() -> void:
-	var stK := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.75, "wins": ["win_a", "win_c"], "cumba": 0.2}
-	var stG := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.45, "wins": ["win_a", "win_c", "win_c"], "cumba": 0.25}
+	var stK := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.75, "wins": ["win_a", "win_c"], "cumba": 0.2, "brick": 0.4, "balcony": 0.4}
+	var stG := {"pal": PAL_N, "fmin": 3, "fmax": 5, "shop": 0.45, "wins": ["win_a", "win_c", "win_c"], "cumba": 0.25, "brick": 0.35, "wood": 0.05, "balcony": 0.4}
 	# zemin ve kenarlar
 	g.ground(-150, 230, -265, -50, 0.0, "cobble", 4.0)
 	g.ground(-150, 230, -62, -50, 0.012, "slab", 6.0)
@@ -785,7 +856,7 @@ func build_north() -> void:
 	add_col(-160, 120, -280, -265, 14, false)
 
 func build_istiklal() -> void:
-	var stI := {"pal": PAL_I, "fmin": 4, "fmax": 5, "shop": 0.85, "wins": ["win_c", "win_a"], "cumba": 0.15}
+	var stI := {"pal": PAL_I, "fmin": 4, "fmax": 5, "shop": 0.85, "wins": ["win_c", "win_a"], "cumba": 0.15, "brick": 0.2, "balcony": 0.5}
 	var ax := VN[3]
 	var z_top := -440.0; var z_bot := -259.0
 	g.ground(120, 240, z_top, -265, 0.0, "cobble", 4.0)
@@ -808,6 +879,9 @@ func build_istiklal() -> void:
 		# blok: önceki sokak ile bu sokak arası
 		block(124, ax - 6, cz + 2.0, prev_w, stI)
 		block(ax + 6, 236, cz + 2.0, prev_w, stI)
+		for lx: float in [150.0, 205.0]:
+			if rng.randf() < 0.6:
+				laundry(lx + rng.randf() * 8.0, cz - 3.4, cz + 3.4, 7.0)
 		# cep sokak sonu: küçük avlu (saksı, bank)
 		flower_pot(133.5, cz + 1.0); flower_pot(226.5, cz - 1.0)
 		prev_w = cz - 2.0
