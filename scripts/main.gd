@@ -34,6 +34,15 @@ var tram: Node3D
 var tram_s := 0.0
 var tram_dir := 1.0
 var tram_path: Array = []
+var city := "istanbul"
+var movers: Array = []
+const CITIES := {
+	"istanbul": {"name": "İstanbul", "hello": "İstanbul'a hoş geldin! Sultanahmet'te dostlar seni bekliyor"},
+	"paris": {"name": "Paris", "hello": "Bienvenue! Paris sokaklarında dostlar seni bekliyor"},
+	"roma": {"name": "Roma", "hello": "Benvenuto! Roma'nın meydanlarında dostlar seni bekliyor"},
+	"londra": {"name": "Londra", "hello": "Welcome! Londra sokaklarında dostlar seni bekliyor"},
+	"barselona": {"name": "Barselona", "hello": "Benvinguts! Barselona'da dostlar seni bekliyor"},
+}
 var tram2: Node3D
 var tram2_s := 0.0
 var tram2_dir := 1.0
@@ -72,18 +81,24 @@ func _ready() -> void:
 		# telefonda karakter daha küçük görünsün, etraf daha çok görünsün
 		out_cam = 7.4
 		cam_pitch = -0.3
-	var f := FileAccess.open("res://map/istanbul.json", FileAccess.READ)
+	_load_save_city()
+	var f := FileAccess.open("res://map/%s.json" % city, FileAccess.READ)
 	MAP = JSON.parse_string(f.get_as_text())
 	COL = MAP.col
 	_make_environment()
-	map_root = (load("res://map/istanbul.scn") as PackedScene).instantiate()
+	map_root = (load("res://map/%s.scn" % city) as PackedScene).instantiate()
 	add_child(map_root)
-	tram = map_root.get_node("Hareketli/Tramvay")
-	for n in ["VapurIskele", "VapurBogaz", "VapurHalic", "BalikEkmek1", "BalikEkmek2"]:
-		ferries[n] = map_root.get_node("Hareketli/" + n)
-	for p in MAP.tram:
-		tram_path.append(Vector3(p[0], 0, p[1]))
-	tram2 = map_root.get_node("Hareketli/TramvayIstiklal")
+	if city == "istanbul":
+		tram = map_root.get_node("Hareketli/Tramvay")
+		for n in ["VapurIskele", "VapurBogaz", "VapurHalic", "BalikEkmek1", "BalikEkmek2"]:
+			ferries[n] = map_root.get_node("Hareketli/" + n)
+		for p in MAP.tram:
+			tram_path.append(Vector3(p[0], 0, p[1]))
+		tram2 = map_root.get_node("Hareketli/TramvayIstiklal")
+	for mv in MAP.get("movers", []):
+		var nd := map_root.get_node_or_null("Hareketli/" + str(mv.node))
+		if nd:
+			movers.append({"n": nd, "path": mv.path, "sp": float(mv.speed), "s": randf() * 50.0, "dir": 1.0, "float": mv.get("float", false)})
 	for pth in MAP.npcs:
 		var npc = NpcScript.new()
 		add_child(npc)
@@ -109,10 +124,10 @@ func _ready() -> void:
 	hud.buy.connect(_on_buy)
 	hud.newday_pressed.connect(_on_new_day)
 	var mb: Array = MAP.bounds
-	hud.set_map(load("res://map/minimap.png"), Rect2(mb[0], mb[1], mb[2], mb[3]), MAP.landmarks)
+	hud.set_map(load("res://map/%s_mini.png" % city), Rect2(mb[0], mb[1], mb[2], mb[3]), MAP.landmarks)
 	hud.set_hint("Sol taraf: yürü  ·  Sağ taraf: kamerayı çevir" if is_touch else "WASD: yürü  ·  Fareyle sürükle: kamera  ·  Tekerlek: yakınlaştır")
 	_sync_hud()
-	hud.toast("Sultanahmet'e hoş geldin! Balonlu dostlar seni bekliyor", 3.5)
+	hud.toast(CITIES[city].hello, 3.5)
 	_debug_shots()
 
 func _make_environment() -> void:
@@ -148,14 +163,15 @@ func _make_environment() -> void:
 	# su
 	var water := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
-	pm.size = Vector2(760, 720)
+	var mb0: Array = MAP.bounds
+	pm.size = Vector2(float(mb0[2]) + 400.0, float(mb0[3]) + 400.0)
 	pm.subdivide_width = 70
 	pm.subdivide_depth = 70
 	water.mesh = pm
 	var wm := ShaderMaterial.new()
 	wm.shader = load("res://map/water.gdshader")
 	water.material_override = wm
-	water.position = Vector3(-20, -0.62, 10)
+	water.position = Vector3(float(mb0[0]) + float(mb0[2]) / 2.0, -0.62, float(mb0[1]) + float(mb0[3]) / 2.0)
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(water)
 	var fl := StaticBody3D.new()
@@ -412,6 +428,14 @@ func _tick_home(delta: float) -> void:
 			pet_node.goal = home_node.pet_bed
 			pet_node.mode = "go"
 
+func _city_items() -> Array:
+	var items := []
+	for k in CITIES:
+		if k == city:
+			continue
+		items.append({"id": "city:" + k, "title": "Pasaport: " + str(CITIES[k].name), "sub": "Bu şehre geç. Dostlukların kayıtlı kalır.", "price": "Git", "enabled": true})
+	return items
+
 func _decor_items() -> Array:
 	var owned: Array = D.get("decor", [])
 	var items := []
@@ -421,6 +445,24 @@ func _decor_items() -> Array:
 			continue
 		items.append({"id": "decor:" + k, "title": "Evin için: " + str(info.name), "sub": "Hipodrom'daki evine yerleşir.", "price": "%d puan" % int(info.price), "enabled": int(D.pts) >= int(info.price)})
 	return items
+
+func _load_save_city() -> void:
+	# kayıt dosyasından hangi şehirde olduğumuzu oku (kayıt asıl _load_save ile yüklenir)
+	if FileAccess.file_exists("user://kayit.json"):
+		var ff := FileAccess.open("user://kayit.json", FileAccess.READ)
+		var d = JSON.parse_string(ff.get_as_text())
+		if d is Dictionary and CITIES.has(str(d.get("city", "istanbul"))):
+			city = str(d.get("city", "istanbul"))
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--city="):
+			city = a.substr(7)
+
+func _go_city(id: String) -> void:
+	if id == city or not CITIES.has(id):
+		return
+	D.city = id
+	_save()
+	get_tree().reload_current_scene()
 
 func _apply_player_colors() -> void:
 	var cur: Dictionary = D.get("cols", {})
@@ -559,15 +601,22 @@ func _sync_hud() -> void:
 		{"id": "treat", "title": "Ödül maması", "sub": "Oyundan sonra ver. Dostluğunu bir kat artırır.", "price": "%d puan" % TREAT_PRICE, "enabled": int(D.pts) >= TREAT_PRICE},
 		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4},
 		{"id": "look", "title": "Kadın / erkek karakter", "sub": "Karakterini değiştir.", "price": "Değiştir", "enabled": true},
-		] + _decor_items() + [
+		] + _city_items() + _decor_items() + [
 		{"id": "col:shirt", "title": "Üst rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE},
 		{"id": "col:pants", "title": "Pantolon / etek rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE},
 		{"id": "col:hair", "title": "Saç rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE}] + _pet_items())
 
 # --- eylem kartı ---
 func _on_bridge_rail() -> bool:
-	var b: Array = MAP.bridge
 	var p := player.position
+	if MAP.has("fishing"):
+		for r in MAP.fishing:
+			if p.x > r[0] and p.x < r[1] and p.z > r[2] and p.z < r[3]:
+				return true
+		return false
+	if not MAP.has("bridge"):
+		return false
+	var b: Array = MAP.bridge
 	return p.x > b[0] and p.x < b[1] and p.z > b[2] and p.z < b[3] and absf(p.x) > 4.6
 
 func _update_actions() -> void:
@@ -627,6 +676,9 @@ func _on_buy(id: String) -> void:
 		D.ch = LOOKS[i]
 		_apply_player_colors()
 		_save()
+		return
+	if id.begins_with("city:"):
+		_go_city(id.substr(5))
 		return
 	if id.begins_with("decor:"):
 		var did := id.substr(6)
@@ -737,12 +789,9 @@ func _clear_target(p: Vector3) -> bool:
 	for c in COL:
 		if p.x > c[0] - 0.6 and p.x < c[1] + 0.6 and p.z > c[2] - 0.6 and p.z < c[3] + 0.6:
 			return false
-	var b: Array = MAP.bridge
-	var pr: Array = MAP.pier
-	if p.x > b[0] + 0.5 and p.x < b[1] - 0.5 and p.z > b[2] and p.z < b[3]:
-		return true
-	if p.x > pr[0] + 0.5 and p.x < pr[1] - 0.5 and p.z > pr[2] + 0.5 and p.z < pr[3]:
-		return true
+	for b in MAP.get("walk_over", [MAP.get("bridge", [0, 0, 0, 0]), MAP.get("pier", [0, 0, 0, 0])]):
+		if p.x > b[0] + 0.5 and p.x < b[1] - 0.5 and p.z > b[2] + 0.5 and p.z < b[3] - 0.5:
+			return true
 	for w in MAP.water:
 		if p.x > w[0] - 0.5 and p.x < w[1] + 0.5 and p.z > w[2] - 0.5 and p.z < w[3] + 0.5:
 			return false
@@ -1070,6 +1119,30 @@ func _process(delta: float) -> void:
 		hud.update_map(Vector2(MAP.home[0], MAP.home[1]) if in_home else ppos, player.facing, dots)
 
 func _update_movers(delta: float) -> void:
+	# genel hareketliler (otobüs, tekne...): yol boyunca ileri geri
+	for mv in movers:
+		var path: Array = mv.path
+		var total := 0.0
+		for i in path.size() - 1:
+			total += Vector2(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]).length()
+		mv.s += mv.dir * mv.sp * delta
+		if mv.s > total: mv.dir = -1.0
+		if mv.s < 0.0: mv.dir = 1.0
+		var s2: float = clampf(mv.s, 0.0, total)
+		for i in path.size() - 1:
+			var a := Vector3(path[i][0], 0, path[i][1]); var b := Vector3(path[i + 1][0], 0, path[i + 1][1])
+			var L := a.distance_to(b)
+			if s2 <= L or i == path.size() - 2:
+				var dir := (b - a).normalized()
+				var nd: Node3D = mv.n
+				nd.position = a + dir * minf(s2, L)
+				if mv.float:
+					nd.position.y = sin(t * 1.1 + nd.position.x) * 0.1
+				nd.rotation.y = atan2(dir.x * mv.dir, dir.z * mv.dir)
+				break
+			s2 -= L
+	if city != "istanbul":
+		return
 	# T1 tramvayı: yol boyunca ileri geri
 	var total := 0.0
 	var segs := []

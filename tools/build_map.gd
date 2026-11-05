@@ -21,6 +21,9 @@ var squares: Array = []      # mini harita için meydanlar
 var animals: Array = []
 var npc_paths: Array = []
 var chunk_cells := {}
+var city_id := "istanbul"
+var lands: Array = [[-225, 237, 0, 295], [-150, 230, -265, -50], [120, 240, -505, -259]]
+var mini_extra: Array = [[-7, 7, -50, 0, "#9a9a9a"], [40, 58, -20, 0, "#a88b6a"]]
 
 const PAL_S := ["#e9b9a3", "#f1d59c", "#c8d8bf", "#e8c4cb", "#bcd0e3", "#efe1c6", "#d9a37f", "#d9c2a7", "#a9c1b4", "#e6a98c", "#f3e3b5", "#c9a9a6"]
 const PAL_N := ["#d8cdb8", "#c9bba4", "#e5dccb", "#b9b0a5", "#d6c3a8", "#c7c9c3", "#e1cfb0", "#b8a48a", "#cfd6d2", "#dcc0a8"]
@@ -268,6 +271,8 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 		elif r < st.get("wood", 0.0) + st.get("brick", 0.0):
 			kind = "tugla"
 			col = pick(BRICK); col.a = 0.25
+		if kind == "siva" and rng.randf() < st.get("stone", 0.0):
+			col.a = 0.1
 		var shop: bool = rng.randf() < st.shop
 		var wk: String = st.wins[rng.randi() % st.wins.size()]
 		var gcol := shade(col, 0.93)
@@ -308,11 +313,12 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 				var du := -fw2 / 2.0 + (q3 + 0.5) * fw2 / dn
 				g.box(0.16, 0.18, 0.22, fx + ux * du + nx * 0.1, h - 0.36, fz + uz * du + nz * 0.1, orn, ry)
 		# pencere kanatları (ahşap evler) ve çiçekli pencere önleri
-		if kind == "ahsap" or rng.randf() < 0.25:
+		var shut: bool = kind == "ahsap" or (st.get("shutters", 0.0) > 0.0 and rng.randf() < st.get("shutters", 0.0))
+		if shut or rng.randf() < 0.25:
 			var fw := w - 0.04
 			var reps := maxf(1.0, roundf(fw / 2.6))
 			var mw := fw / reps
-			var shc := pick(["#3f6b4a", "#5a3a28", "#2f4f6f", "#7a2f2a", "#6b6f4a"])
+			var shc := pick(st.get("shutter_cols", ["#3f6b4a", "#5a3a28", "#2f4f6f", "#7a2f2a", "#6b6f4a"]))
 			for fl in floors - 1:
 				var ytop := h - fl * fh
 				var wy0 := ytop - 0.84 * fh
@@ -321,7 +327,7 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 					var cu := -fw / 2.0 + (q + 0.5) * mw
 					var px := fx + ux * cu + nx * 0.06
 					var pz := fz + uz * cu + nz * 0.06
-					if kind == "ahsap":
+					if shut:
 						for e: float in [-1.0, 1.0]:
 							g.box(mw * 0.17, wh, 0.06, px + ux * e * mw * 0.36, wy0, pz + uz * e * mw * 0.36, shc, ry)
 					elif fl == floors - 2 and rng.randf() < 0.6:
@@ -333,7 +339,26 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 		g.box(w + 0.25, 0.3, d + 0.25, cx, h - 0.15, cz, trim, ry)
 		if kind == "ahsap":
 			g.box(w + eave * 2.0, 0.12, d + eave * 2.0, cx, h + 0.02, cz, C("#5b3a28"), ry)
-		g.put("hip" if w > d else "pyr", Vector3(cx, h + 0.1, cz), pick(ROOF), ry, Vector3(w + eave, 1.4 + rng.randf() * 0.5, d + eave), "roof")
+		var rk: String = st.get("roof_kind", "hip")
+		var rcols: Array = st.get("roof", ROOF)
+		if rk == "mansard":
+			# Paris: dik eğimli arduvaz çatı + çatı pencereleri
+			g.box(w + 0.2, 2.6, d - 0.6, cx, h, cz, pick(rcols), ry)
+			g.put("hip" if w > d else "pyr", Vector3(cx, h + 2.6, cz), pick(rcols), ry, Vector3(w - 0.4, 0.9, d - 1.4), "roof")
+			var nd := int(w / 2.4)
+			for q in nd:
+				var du := -w / 2.0 + (q + 0.5) * w / nd
+				var dx := fx + ux * du + nx * 0.05
+				var dz := fz + uz * du + nz * 0.05
+				g.wall_box(1.0, 1.6, 0.8, dx, h + 0.5, dz, C("#e8e2d6"), ry, "win_a", 1.0, 1.6)
+				g.put("pyr", Vector3(dx, h + 2.1, dz), pick(rcols), ry, Vector3(1.2, 0.5, 1.0))
+		elif rk == "flat":
+			# düz teras çatı + korkuluk
+			g.box(w + 0.1, 0.9, 0.18, fx - nx * 0.05, h, fz - nz * 0.05, trim, ry)
+			if rng.randf() < 0.5:
+				g.box(1.6, 1.6, 1.6, cx, h, cz, shade(col, 0.9), ry)
+		else:
+			g.put("hip" if w > d else "pyr", Vector3(cx, h + 0.1, cz), pick(rcols), ry, Vector3(w + eave, st.get("roof_h", 1.4) + rng.randf() * 0.5, d + eave), "roof")
 		if rng.randf() < 0.45:
 			var off := (rng.randf() - 0.5) * w * 0.5
 			g.box(0.55, 1.6, 0.55, cx + ux * off - nx * d * 0.15, h + 0.4, cz + uz * off - nz * d * 0.15, C("#9a6a52"), ry)
@@ -1224,8 +1249,8 @@ const CAT_STYLES := [["tekir", "#8b8d92", "#4d4f53"], ["tekir", "#c98b55", "#8a5
 const DOG_STYLES := [["solid", "#c99a5b", ""], ["solid", "#e2cfa6", ""], ["solid", "#2b2828", ""], ["benekli", "#efe8dc", "#3a3536"], ["solid", "#7a5232", ""],
 	["solid", "#b5713a", ""], ["benekli", "#d9b46a", "#6b4a2a"], ["solid", "#9a948a", ""]]
 
-func add_animal(cat: bool, name: String, x: float, z: float, y: float, place_txt: String, style: Array, size: float) -> void:
-	animals.append([name.to_lower().replace(" ", "_") + "_%d" % animals.size(), cat, style[1], name, snappedf(x, 0.1), snappedf(z, 0.1), y, place_txt, style[0], style[2], snappedf(size, 0.01), rng.randf() < 0.7 and not cat])
+func add_animal(cat: bool, name: String, x: float, z: float, y: float, place_txt: String, style: Array, size: float, prefix: String = "") -> void:
+	animals.append([(prefix + "_" if prefix != "" else "") + name.to_lower().replace(" ", "_") + "_%d" % animals.size(), cat, style[1], name, snappedf(x, 0.1), snappedf(z, 0.1), y, place_txt, style[0], style[2], snappedf(size, 0.01), rng.randf() < 0.7 and not cat])
 
 func place_animals() -> void:
 	var ci := 0; var di := 0
@@ -1301,7 +1326,7 @@ func make_minimap(bounds: Rect2) -> void:
 	img.fill(C("#7fb7d1"))
 	var to_px := func(x0: float, x1: float, z0: float, z1: float) -> Rect2i:
 		return Rect2i(int((x0 - bounds.position.x) * sc), int((z0 - bounds.position.y) * sc), max(1, int((x1 - x0) * sc)), max(1, int((z1 - z0) * sc)))
-	for land in [[-225, 237, 0, 295], [-150, 230, -265, -50], [120, 240, -440, -259]]:
+	for land in lands:
 		img.fill_rect(to_px.call(land[0], land[1], land[2], land[3]), C("#efe4cf"))
 	for sq in squares:
 		img.fill_rect(to_px.call(sq[0], sq[1], sq[2], sq[3]), C("#f7f0e2"))
@@ -1310,12 +1335,221 @@ func make_minimap(bounds: Rect2) -> void:
 	for c in COL:
 		if (c[1] - c[0]) * (c[3] - c[2]) > 6.0:
 			img.fill_rect(to_px.call(c[0], c[1], c[2], c[3]), C("#c9a98a"))
-	img.fill_rect(to_px.call(-7, 7, -50, 0), C("#9a9a9a"))
-	img.fill_rect(to_px.call(40, 58, -20, 0), C("#a88b6a"))
-	img.save_png("res://map/minimap.png")
+	for b in mini_extra:
+		img.fill_rect(to_px.call(b[0], b[1], b[2], b[3]), C(b[4]))
+	img.save_png("res://map/%s_mini.png" % city_id)
+
+
+# ------------------------------------------------------------ şehirler için ortak yardımcılar
+## Izgara mahalle: xs/zs yol eksenleri; aralarına blok koyar (skip dikdörtgenleriyle çakışanlar hariç)
+func grid(xs0: Array, zs0: Array, st: Dictionary, vnames: Array, hnames: Array, skips: Array, rw: float = 5.0, chunk: String = "Mahalle") -> void:
+	var xs := xs0.duplicate(); xs.sort()
+	var zs := zs0.duplicate(); zs.sort()
+	for i in xs.size():
+		road(str(vnames[i % vnames.size()]), xs[i] - rw / 2.0, xs[i] + rw / 2.0, zs[0], zs[zs.size() - 1])
+	for j in zs.size():
+		road(str(hnames[j % hnames.size()]), xs[0], xs[xs.size() - 1], zs[j] - rw / 2.0, zs[j] + rw / 2.0)
+	for j in zs.size() - 1:
+		for i in xs.size() - 1:
+			var bx0: float = xs[i] + rw / 2.0; var bx1: float = xs[i + 1] - rw / 2.0
+			var bz0: float = zs[j] + rw / 2.0; var bz1: float = zs[j + 1] - rw / 2.0
+			var skip := false
+			for r in skips:
+				if bx1 > r[0] and bx0 < r[1] and bz1 > r[2] and bz0 < r[3]:
+					skip = true
+			if not skip and bx1 - bx0 > 6.0 and bz1 - bz0 > 6.0:
+				block(bx0, bx1, bz0, bz1, st)
+		flush_chunk("%s_%d" % [chunk, j])
+	for j in range(0, zs.size(), 2):
+		for i in range(0, xs.size(), 2):
+			if rng.randf() < 0.5:
+				street_sign(str(vnames[i % vnames.size()]), xs[i] + rw / 2.0 + 0.4, zs[j] + rw / 2.0 + 0.4)
+
+## Nehir/deniz: su alanı, kıyı duvarı ve çarpışma (köprü aralıkları boş bırakılır). Yatay nehir (x boyunca).
+func water_h(x0: float, x1: float, z0: float, z1: float, gaps: Array, wall_n := true, wall_s := true) -> void:
+	var cuts := [x0]
+	for gp in gaps:
+		cuts.append(gp[0]); cuts.append(gp[1])
+	cuts.append(x1)
+	for k in range(0, cuts.size(), 2):
+		var a: float = cuts[k]; var b: float = cuts[k + 1]
+		if b - a > 0.5:
+			add_col(a, b, z0, z1, 14.0, false)
+	var sc := stone(C("#c9bda6"))
+	for k in range(0, cuts.size(), 2):
+		var a2: float = cuts[k]; var b2: float = cuts[k + 1]
+		if b2 - a2 < 0.5:
+			continue
+		if wall_n:
+			g.box(b2 - a2, 1.6, 0.8, (a2 + b2) / 2.0, -1.0, z0 + 0.4, sc)
+			g.box(b2 - a2, 0.7, 0.5, (a2 + b2) / 2.0, 0.0, z0 - 0.25, C("#d8cfbd"))
+		if wall_s:
+			g.box(b2 - a2, 1.6, 0.8, (a2 + b2) / 2.0, -1.0, z1 - 0.4, sc)
+			g.box(b2 - a2, 0.7, 0.5, (a2 + b2) / 2.0, 0.0, z1 + 0.25, C("#d8cfbd"))
+
+## Dikey (z boyunca) su
+func water_v(x0: float, x1: float, z0: float, z1: float, gaps: Array) -> void:
+	var cuts := [z0]
+	for gp in gaps:
+		cuts.append(gp[0]); cuts.append(gp[1])
+	cuts.append(z1)
+	for k in range(0, cuts.size(), 2):
+		var a: float = cuts[k]; var b: float = cuts[k + 1]
+		if b - a > 0.5:
+			add_col(x0, x1, a, b, 14.0, false)
+			g.box(0.8, 1.6, b - a, x0 + 0.4, -1.0, (a + b) / 2.0, stone(C("#c9bda6")))
+			g.box(0.8, 1.6, b - a, x1 - 0.4, -1.0, (a + b) / 2.0, stone(C("#c9bda6")))
+
+## Taş köprü (z boyunca): tabliye, korkuluk, kemerler
+func stone_bridge(name: String, x: float, z0: float, z1: float, w: float, col: Color, arches: int = 3, rail: Color = Color("#d8cfbd")) -> void:
+	g.box(w, 0.6, z1 - z0, x, -0.45, (z0 + z1) / 2.0, col)
+	g.ground(x - w / 2.0, x + w / 2.0, z0, z1, 0.16, "slab", 4.0)
+	for e: float in [-1.0, 1.0]:
+		g.box(0.45, 1.0, z1 - z0, x + e * (w / 2.0 - 0.22), 0.0, (z0 + z1) / 2.0, rail)
+		add_col(x + e * (w / 2.0 - 0.22) - 0.22, x + e * (w / 2.0 - 0.22) + 0.22, z0, z1, 2.0, false)
+	var L := z1 - z0
+	for k in arches:
+		var az := z0 + (k + 0.5) * L / arches
+		g.put("cyl", Vector3(x, -1.0, az), col.darkened(0.15), 0, Vector3(L / arches * 0.42, w + 0.2, L / arches * 0.42), "plain", 0.0, PI / 2.0)
+		if k > 0:
+			g.box(w + 0.6, 2.0, 1.4, x, -2.4, z0 + k * L / arches, col)
+	road(name, x - w / 2.0, x + w / 2.0, z0, z1)
+	for k in int(L / 14.0):
+		lamp(x + w / 2.0 - 0.5, z0 + 7.0 + k * 14.0)
+
+## Kafe terası: tente + masalar (cephe önü)
+func terrace(x0: float, z: float, n: int, col: Color, dz: float = 1.0) -> void:
+	g.box(n * 2.6 + 0.6, 0.08, 2.0, x0 + n * 1.3, 2.9, z + dz * 1.0, col)
+	for k in n:
+		cafe(x0 + 1.3 + k * 2.6, z + dz * 1.4, col)
+
+## Park: çim, yollar, ağaçlar, banklar
+func park(x0: float, x1: float, z0: float, z1: float, name: String, kind: String = "plane", step: float = 10.0) -> void:
+	g.ground(x0, x1, z0, z1, 0.03, "grass", 5.0)
+	parks.append([x0, x1, z0, z1])
+	area(name, x0, x1, z0, z1)
+	var cx := (x0 + x1) / 2.0; var cz := (z0 + z1) / 2.0
+	g.ground(cx - 2.5, cx + 2.5, z0, z1, 0.05, "slab", 4.0)
+	g.ground(x0, x1, cz - 2.5, cz + 2.5, 0.05, "slab", 4.0)
+	var x := x0 + 5.0
+	while x < x1 - 4.0:
+		var z := z0 + 5.0
+		while z < z1 - 4.0:
+			if absf(x - cx) > 5.0 and absf(z - cz) > 5.0 and rng.randf() < 0.8:
+				tree(x + rng.randf_range(-1.5, 1.5), z + rng.randf_range(-1.5, 1.5), kind, rng.randf_range(0.85, 1.15))
+			z += step
+		x += step
+	for k in 4:
+		bench(cx + 4.2, z0 + 8.0 + k * (z1 - z0 - 16.0) / 3.0, -PI / 2.0)
+		bench(cx - 4.2, z0 + 8.0 + k * (z1 - z0 - 16.0) / 3.0, PI / 2.0)
+
+func fountain_round(x: float, z: float, r: float, col: Color = Color("#d8d2c4")) -> void:
+	g.put("cyl", Vector3(x, 0.35, z), col, 0, Vector3(r, 0.7, r))
+	g.put("cyl", Vector3(x, 0.72, z), C("#7cc6ea"), 0, Vector3(r * 0.9, 0.04, r * 0.9))
+	g.put("cyl8", Vector3(x, 1.4, z), col, 0, Vector3(0.5, 2.0, 0.5))
+	g.put("cyl", Vector3(x, 2.4, z), col, 0, Vector3(r * 0.4, 0.25, r * 0.4))
+	g.put("ball", Vector3(x, 3.0, z), C("#bfe3f5"), 0, Vector3(0.5, 0.9, 0.5))
+	add_col(x - r, x + r, z - r, z + r, 1.0, false)
+
+func obelisk(x: float, z: float, h: float, col: Color) -> void:
+	g.box(3.0, 1.6, 3.0, x, 0, z, C("#bfb39c"))
+	g.put("box", Vector3(x, 1.6 + h / 2.0, z), col, 0, Vector3(1.3, h, 1.3))
+	g.put("pyr", Vector3(x, 1.6 + h, z), C("#d4a93c"), 0, Vector3(1.3, 1.2, 1.3))
+	add_col(x - 1.5, x + 1.5, z - 1.5, z + 1.5)
 
 # ------------------------------------------------------------ ana kurulum
 func _init() -> void:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--city="):
+			city_id = a.substr(7)
+	if city_id == "istanbul":
+		_init_istanbul()
+	else:
+		_init_city()
+
+## Diğer şehirler: tools/cities/<id>.gd -> build(B) veri sözlüğü döndürür
+func _init_city() -> void:
+	rng.seed = hash(city_id)
+	font = load("res://assets/fonts/ui_font.tres")
+	g = Geo.new()
+	setup_materials()
+	mroot = Node3D.new()
+	mroot.name = city_id.capitalize()
+	for n in ["Zemin", "Sehir", "SimgeYapilar", "Dekor", "Carpisma", "Tabelalar", "Hareketli"]:
+		var c := Node3D.new(); c.name = n; mroot.add_child(c)
+	var CityB = load("res://tools/cities/%s.gd" % city_id)
+	var data: Dictionary = CityB.build(self)
+	lands = data.lands
+	mini_extra = data.get("mini_extra", [])
+	place_animals_generic(data.get("fixed_animals", []), data.cat_names, data.dog_names, data.get("street_animals", 22))
+	place_npc_paths_generic(data.get("extra_npcs", []))
+	for n in mroot.get_children():
+		_own(n)
+	var ps := PackedScene.new()
+	ps.pack(mroot)
+	print("scn: ", ResourceSaver.save(ps, "res://map/%s.scn" % city_id, ResourceSaver.FLAG_COMPRESS))
+	var bounds: Rect2 = data.bounds
+	make_minimap(bounds)
+	var out := {
+		"col": COL, "roads": roads, "areas": areas,
+		"fountains": data.fountains, "water": data.water, "walk_over": data.get("walk_over", []),
+		"fishing": data.get("fishing", []), "start": data.start,
+		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
+		"animals": animals, "npcs": npc_paths, "landmarks": data.landmarks, "movers": data.get("movers", [])}
+	var f := FileAccess.open("res://map/%s.json" % city_id, FileAccess.WRITE)
+	f.store_string(JSON.stringify(out))
+	f.close()
+	print("json: carpisma %d yol %d hayvan %d npc %d" % [COL.size(), roads.size(), animals.size(), npc_paths.size()])
+	quit()
+
+func place_animals_generic(fixed: Array, cat_names: Array, dog_names: Array, extra: int) -> void:
+	var ci := 0; var di := 0
+	for f in fixed:
+		if f[0]:
+			add_animal(true, cat_names[ci % cat_names.size()], f[1], f[2], f[3], f[4], CAT_STYLES[rng.randi() % CAT_STYLES.size()], rng.randf_range(0.9, 1.1), city_id); ci += 1
+		else:
+			add_animal(false, dog_names[di % dog_names.size()], f[1], f[2], f[3], f[4], DOG_STYLES[rng.randi() % DOG_STYLES.size()], rng.randf_range(0.9, 1.3), city_id); di += 1
+	var side := []
+	for r in roads:
+		if minf(r[2] - r[1], r[4] - r[3]) < 7.0 and maxf(r[2] - r[1], r[4] - r[3]) > 20.0:
+			side.append(r)
+	var n := 0
+	while n < extra and side.size() > 0:
+		var r: Array = side[rng.randi() % side.size()]
+		var horiz: bool = (r[2] - r[1]) > (r[4] - r[3])
+		var x: float = rng.randf_range(r[1] + 4, r[2] - 4) if horiz else (r[1] + 0.8)
+		var z: float = (r[3] + 0.8) if horiz else rng.randf_range(r[3] + 4, r[4] - 4)
+		var cat := rng.randf() < 0.6
+		if cat:
+			add_animal(true, cat_names[ci % cat_names.size()], x, z, 0.0, r[0], CAT_STYLES[rng.randi() % CAT_STYLES.size()], rng.randf_range(0.85, 1.1), city_id); ci += 1
+		else:
+			add_animal(false, dog_names[di % dog_names.size()], x, z, 0.0, r[0], DOG_STYLES[rng.randi() % DOG_STYLES.size()], rng.randf_range(0.85, 1.3), city_id); di += 1
+		n += 1
+
+func place_npc_paths_generic(extra: Array) -> void:
+	var cands := []
+	for r in roads:
+		var L: float = maxf(r[2] - r[1], r[4] - r[3])
+		if L > 30.0 and minf(r[2] - r[1], r[4] - r[3]) < 30.0:
+			cands.append(r)
+	for i in 48:
+		if cands.is_empty():
+			break
+		var r: Array = cands[rng.randi() % cands.size()]
+		var horiz: bool = (r[2] - r[1]) > (r[4] - r[3])
+		var off := rng.randf_range(-0.35, 0.35)
+		if horiz:
+			var z: float = lerpf(r[3], r[4], 0.5 + off)
+			var x0: float = rng.randf_range(r[1] + 3, (r[1] + r[2]) / 2.0)
+			npc_paths.append([snappedf(x0, 0.1), snappedf(z, 0.1), snappedf(minf(x0 + rng.randf_range(25, 60), r[2] - 3), 0.1), snappedf(z, 0.1)])
+		else:
+			var x: float = lerpf(r[1], r[2], 0.5 + off)
+			var z0: float = rng.randf_range(r[3] + 3, (r[3] + r[4]) / 2.0)
+			npc_paths.append([snappedf(x, 0.1), snappedf(z0, 0.1), snappedf(x, 0.1), snappedf(minf(z0 + rng.randf_range(25, 60), r[4] - 3), 0.1)])
+	for e in extra:
+		npc_paths.append(e)
+
+func _init_istanbul() -> void:
 	rng.seed = 2027
 	font = load("res://assets/fonts/ui_font.tres")
 	g = Geo.new()
