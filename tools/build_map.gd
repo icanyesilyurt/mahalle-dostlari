@@ -764,6 +764,19 @@ func build_specials() -> void:
 		tz += 11.0
 	for b in [[165, H[2] - 4.5, 0.0], [190, H[2] - 4.5, 0.0], [165, H[2] + 4.5, PI], [190, H[2] + 4.5, PI], [200, (gz0 + gz1) / 2.0 - 4.5, 0.0]]:
 		bench(b[0], b[1], b[2])
+	# lale tarhları: yol kenarı ve fıskiye çevresi
+	var fx2 := gx0 + 6.0
+	while fx2 < 172.0:
+		flower_bed(fx2, H[2] - 4.2, 4.0, 1.2)
+		flower_bed(fx2, H[2] + 4.2, 4.0, 1.2)
+		fx2 += 8.0
+	for k in 6:
+		var ga := k * TAU / 6.0 + 0.5
+		flower_bed(gfx + cos(ga) * 6.2, gfz + sin(ga) * 6.2, 1.6, 1.6)
+	var lzp := gz0 + 8.0
+	while lzp < gz1 - 4.0:
+		lamp(174.2, lzp); lamp(181.8, lzp + 9.0)
+		lzp += 18.0
 	area("Gülhane Parkı", gx0, 235, gz0, gz1)
 	g.wall_box(3.0, 9.0, gz1 - gz0, 236.5, 0, (gz0 + gz1) / 2.0, C("#b9ab92"), 0, "door", 200, 9)
 	add_col(235, 238, gz0, gz1)
@@ -852,6 +865,26 @@ func build_north() -> void:
 	g.ground(-150, 230, -62, -50, 0.012, "slab", 6.0)
 	g.flush(mroot.get_node("Zemin"), mroot, "ZeminKuzey", false)
 	quay(-150, -7, -52, -50); quay(7, 232, -52, -50)
+	# Karaköy rıhtımı: balıkçı lokantaları, babalar, banklar
+	var qx := -140.0
+	while qx < 225.0:
+		if absf(qx) > 14.0:
+			g.put("cyl8", Vector3(qx, 0.3, -50.8), C("#2c2b2a"), 0, Vector3(0.35, 0.6, 0.35))
+		qx += 7.0
+	cafe_row(-120.0, -60.2, 10, 3.2, 0.0)
+	cafe_row(-60.0, -60.2, 9, 3.2, 0.0)
+	cafe_row(70.0, -60.2, 12, 3.2, 0.0)
+	cafe_row(150.0, -60.2, 10, 3.2, 0.0)
+	var kb := -135.0
+	while kb < 220.0:
+		if absf(kb) > 20.0:
+			bench(kb, -52.6, PI)
+		kb += 23.0
+	# Karaköy iskelesi
+	g.box(18, 0.5, 9, 28, -0.3, -45.5, C("#7a6a5a"))
+	g.wall_box(14, 4.0, 6, 28, 0.2, -45.5, C("#e6dccb"), 0, "door", 3.5, 4.0)
+	g.put("hip", Vector3(28, 4.2, -45.5), C(LEAD), 0, Vector3(16, 1.6, 8), "roof")
+	label("KARAKÖY İSKELESİ", Vector3(28, 6.4, -45.5), 60, C("#fffaf1"), C("#1f3a5a"), 8, true)
 	quay(230, 232, -265, -50)
 	add_col(-150, -7, -50, -49.5, 4, false); add_col(7, 240, -50, -49.5, 4, false)
 	add_col(230, 245, -265, -50, 14, false)
@@ -899,6 +932,84 @@ func build_north() -> void:
 	flush_chunk("KuzeyArka", 600.0)
 	add_col(-160, 120, -280, -265, 14, false)
 
+## Pasaj girişi: iki taş ayak, kemer, karanlık iç, tabela. side: -1 batı cephesi (+x'e bakar), +1 doğu
+func pasaj(name: String, x: float, z: float, side: float) -> void:
+	var ry := PI / 2.0
+	var c := stone(C("#e2d6c0"))
+	for e: float in [-1.0, 1.0]:
+		g.box(0.9, 6.0, 0.9, x, 0, z + e * 2.6, c)
+	g.box(0.9, 1.4, 6.1, x, 6.0, z, c)
+	g.put("cyl", Vector3(x, 6.0, z), c, 0, Vector3(2.2, 0.85, 2.2), "plain", PI / 2.0)
+	g.box(0.2, 5.8, 4.4, x + side * 0.35, 0, z, C("#2a2422"))
+	g.box(0.25, 0.9, 4.6, x - side * 0.5, 7.5, z, C("#1f3a5a"))
+	label(name, Vector3(x - side * 0.9, 8.6, z), 46, C("#f6e7b8"), C("#1f3a5a"), 8, true)
+	for k in 3:
+		g.box(0.4, 0.06, 0.4, x - side * 0.6, 6.6, z - 1.6 + k * 1.6, C("#fff1c8"))
+
+func bunting(x0: float, x1: float, z: float, y: float) -> void:
+	g.box(x1 - x0, 0.03, 0.03, (x0 + x1) / 2.0, y, z, C("#3a3633"))
+	var n := int((x1 - x0) / 0.7)
+	for i in n:
+		var fx := x0 + 0.35 + i * 0.7
+		var sag := sin(float(i) / float(n) * PI) * 0.6
+		g.put("pyr", Vector3(fx, y - 0.45 - sag * 0.3, z), pick(["#c8423a", "#f2c230", "#3b6aa8", "#2f7d6d", "#f2efe9", "#e58a3a"]), 0, Vector3(0.45, -0.45, 0.04))
+
+func street_cart(x: float, z: float, text: String, col: Color) -> void:
+	g.box(1.6, 0.9, 0.9, x, 0.35, z, col)
+	g.box(1.7, 0.08, 1.0, x, 1.25, z, C("#f2efe9"))
+	for e: float in [-1.0, 1.0]:
+		g.put("cyl8", Vector3(x + e * 0.55, 0.3, z + 0.48), C("#2c2b2a"), 0, Vector3(0.3, 0.06, 0.3), "plain", PI / 2.0)
+		g.box(0.05, 1.2, 0.05, x + e * 0.75, 1.3, z, C("#3a3633"))
+	g.put("hip", Vector3(x, 2.5, z), col, 0, Vector3(2.0, 0.5, 1.3), "roof")
+	label(text, Vector3(x, 3.1, z), 34, C("#fffaf1"), col, 6, true)
+	add_col(x - 0.85, x + 0.85, z - 0.5, z + 0.5)
+
+## Taksim Meydanı: İstiklal'in kuzey ucu
+func build_taksim(ax: float, z_top: float) -> void:
+	var tz0 := -505.0
+	g.ground(110, 250, tz0, z_top, 0.0, "cobble", 4.0)
+	g.ground(122, 238, tz0 + 6, z_top, 0.012, "slab", 6.0)
+	area("Taksim Meydanı", 122, 238, tz0 + 6, z_top)
+	squares.append([122, 238, tz0 + 6, z_top])
+	road("Taksim Meydanı", 122, 238, tz0 + 6, z_top)
+	# Cumhuriyet Anıtı (sadeleştirilmiş): basamaklar, taş gövde, kemer, figürler
+	var mx := ax; var mz := -470.0
+	for k in 3:
+		g.box(14.0 - k * 2.0, 0.35, 14.0 - k * 2.0, mx, k * 0.35, mz, C("#d6cfc2"))
+	g.wall_box(6.0, 7.0, 6.0, mx, 1.05, mz, stone(C("#cfc5b2")), 0, "door", 6.0, 7.0, true)
+	for e: float in [-1.0, 1.0]:
+		g.box(1.0, 10.0, 1.0, mx + e * 3.6, 1.05, mz, stone(C("#c9bea9")))
+	g.box(8.2, 1.2, 1.2, mx, 11.05, mz, stone(C("#c9bea9")))
+	for k in 3:
+		var fx := mx - 1.6 + k * 1.6
+		g.put("cyl8", Vector3(fx, 8.9, mz), C("#4f6b55"), 0, Vector3(0.35, 1.7, 0.35))
+		g.put("ball", Vector3(fx, 9.95, mz), C("#4f6b55"), 0, Vector3(0.3, 0.3, 0.3))
+	add_col(mx - 7, mx + 7, mz - 7, mz + 7)
+	# Gezi Parkı (batı) ve çevre binalar
+	g.ground(122, 160, tz0 + 6, z_top - 18, 0.03, "grass", 5.0)
+	parks.append([122, 160, tz0 + 6, z_top - 18])
+	var tx := 126.0
+	while tx < 158.0:
+		var tzz := tz0 + 10.0
+		while tzz < z_top - 22.0:
+			tree(tx + rng.randf() * 2, tzz + rng.randf() * 2, "plane", 1.0)
+			tzz += 9.0
+		tx += 9.0
+	# kültür merkezi (doğu): cam cepheli modern bina
+	g.wall_box(34, 13, 22, 222, 0, -478, C("#cfd6d9"), 0, "shop", 3.0, 4.3, true)
+	g.box(36, 0.6, 24, 222, 13, -478, C("#6f7a80"))
+	add_col(205, 239, -489, -467)
+	g.wall_box(140, 16, 6, 180, 0, tz0 + 3, C("#e3d6c2"), 0, "win_c", 2.6, 3.2)
+	add_col(110, 250, tz0 - 10, tz0 + 6, 14, false)
+	add_col(110, 122, tz0, z_top, 14, false)
+	add_col(238, 250, tz0, z_top, 14, false)
+	for k in 6:
+		lamp(165 + k * 6.5, -452.0)
+	for b: float in [168.0, 176.0, 184.0, 192.0]:
+		bench(b, -458.0, 0.0)
+	simit_cart(200, -455)
+	big_label("Taksim Meydanı", Vector3(mx, 18, mz), 120)
+
 func build_istiklal() -> void:
 	var stI := {"pal": PAL_I, "fmin": 4, "fmax": 5, "shop": 0.85, "wins": ["win_c", "win_a"], "cumba": 0.15, "brick": 0.2, "balcony": 0.5}
 	var ax := VN[3]
@@ -932,15 +1043,25 @@ func build_istiklal() -> void:
 		k += 1
 	block(124, ax - 6, z_top, prev_w, stI)
 	block(ax + 6, 236, z_top, prev_w, stI)
+	# pasaj girişleri (cadde cephesinde süslü kemerli kapılar)
+	var pasajlar := [["Çiçek Pasajı", -1.0, -282.0], ["Atlas Pasajı", 1.0, -313.0], ["Hazzopulo Pasajı", -1.0, -344.0], ["Avrupa Pasajı", 1.0, -375.0], ["Sahaflar Pasajı", -1.0, -406.0]]
+	for pj in pasajlar:
+		pasaj(pj[0], ax + float(pj[1]) * 7.45, float(pj[2]), float(pj[1]))
+	# caddeye gerilen renkli bayrak süsleri
+	var bz := -268.0
+	while bz > z_top + 8.0:
+		bunting(ax - 7.4, ax + 7.4, bz, 9.5)
+		bz -= 11.0
+	street_cart(ax - 3.5, -298.0, "KESTANE", C("#8a3a2a"))
+	street_cart(ax + 3.5, -352.0, "DONDURMA", C("#3b6aa8"))
+	street_cart(ax - 3.5, -395.0, "SİMİT", C("#c8423a"))
 	# cep sokak uçları kapalı duvar
 	for zz in range(int(z_top), -265, 6):
 		g.wall_box(6, 12, 6, 127, 0, zz + 3, pick(PAL_I), 0, "win_a", 2.6, 3.0)
 		g.wall_box(6, 12, 6, 233, 0, zz + 3, pick(PAL_I), 0, "win_a", 2.6, 3.0)
 	add_col(110, 124, z_top - 10, -259, 14, false)
 	add_col(236, 250, z_top - 10, -259, 14, false)
-	add_col(110, 250, z_top - 20, z_top, 14, false)
-	g.wall_box(120, 16, 6, 180, 0, z_top - 3, C("#e3d6c2"), 0, "win_c", 2.6, 3.2)
-	big_label("Taksim'e", Vector3(180, 8, z_top + 2), 80)
+	build_taksim(ax, z_top)
 	var lz := -275.0
 	while lz > z_top + 10:
 		lamp(ax - 5.0, lz); lamp(ax + 5.0, lz - 7.0)
@@ -1009,7 +1130,9 @@ func place_animals() -> void:
 		[false, 5.5, -40.0, 0.0, "Galata Köprüsü"], [false, 25.0, -56.0, 0.0, "Karaköy Rıhtımı"], [true, 0.0, -170.0, 0.0, "Kule Yokuşu"],
 		[false, 30.0, -195.0, 0.0, "Galata Meydanı"], [true, 60.0, -210.0, 0.0, "Kulenin dibinde"], [true, 175.0, -300.0, 0.0, "İstiklal Caddesi"],
 		[false, 185.0, -360.0, 0.0, "İstiklal Caddesi"], [true, 140.0, -319.0, 0.0, "Pasaj Batı Sokağı"], [true, 220.0, -365.0, 0.0, "Sahne Doğu Sokağı"],
-		[true, 80.0, 30.0, 0.0, "Sirkeci Garı önü"], [false, 120.0, 60.0, 0.0, "Sirkeci Caddesi"], [true, 82.0, 222.0, 0.0, "Sultanahmet çimenlerinde"]]
+		[true, 80.0, 30.0, 0.0, "Sirkeci Garı önü"], [false, 120.0, 60.0, 0.0, "Sirkeci Caddesi"], [true, 82.0, 222.0, 0.0, "Sultanahmet çimenlerinde"],
+		[false, 172.0, -462.0, 0.0, "Taksim Anıtı önünde"], [true, 140.0, -470.0, 0.0, "Gezi Parkı"], [true, -45.0, -58.5, 0.0, "Karaköy balıkçılarında"],
+		[false, 120.0, -54.0, 0.0, "Karaköy Rıhtımı"], [true, 176.0, -330.0, 0.0, "İstiklal vitrin önü"]]
 	for f in fixed:
 		if f[0]:
 			add_animal(true, CAT_NAMES[ci % CAT_NAMES.size()], f[1], f[2], f[3], f[4], CAT_STYLES[rng.randi() % CAT_STYLES.size()], rng.randf_range(0.9, 1.1)); ci += 1
@@ -1056,6 +1179,12 @@ func place_npc_paths() -> void:
 	npc_paths.append([-3.0, -48.0, -3.0, -4.0]); npc_paths.append([3.0, -4.0, 3.0, -46.0]); npc_paths.append([2.0, -10.0, 2.0, -45.0])
 	npc_paths.append([20.0, 205.0, 65.0, 240.0]); npc_paths.append([10.0, 230.0, 60.0, 200.0]); npc_paths.append([30.0, 175.0, 30.0, 270.0])
 	npc_paths.append([178.0, -270.0, 178.0, -420.0]); npc_paths.append([183.0, -410.0, 183.0, -280.0]); npc_paths.append([176.0, -300.0, 176.0, -380.0])
+	# İstiklal kalabalığı, Taksim ve Karaköy rıhtımı
+	for k in 8:
+		var xx := 175.5 + (k % 4) * 3.0
+		npc_paths.append([xx, -268.0 - k * 9.0, xx, -436.0 + k * 7.0])
+	npc_paths.append([165.0, -455.0, 205.0, -455.0]); npc_paths.append([200.0, -462.0, 165.0, -490.0]); npc_paths.append([190.0, -445.0, 190.0, -495.0])
+	npc_paths.append([-130.0, -54.0, -20.0, -54.0]); npc_paths.append([20.0, -53.5, 140.0, -53.5]); npc_paths.append([60.0, -55.0, 200.0, -55.0])
 
 # ------------------------------------------------------------ mini harita
 func make_minimap(bounds: Rect2) -> void:
@@ -1105,7 +1234,7 @@ func _init() -> void:
 	var ps := PackedScene.new()
 	ps.pack(mroot)
 	print("scn: ", ResourceSaver.save(ps, "res://map/istanbul.scn", ResourceSaver.FLAG_COMPRESS))
-	var bounds := Rect2(-240, -450, 500, 760)
+	var bounds := Rect2(-240, -515, 500, 825)
 	make_minimap(bounds)
 	var data := {
 		"col": COL, "roads": roads, "areas": areas,
@@ -1118,7 +1247,7 @@ func _init() -> void:
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
 		"animals": animals, "npcs": npc_paths,
 		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
-			["Mısır Çarşısı", -90, 25], ["Sirkeci", 80, 30], ["Galata Köprüsü", 0, -25], ["Karaköy", -40, -75], ["Galata Kulesi", 45, -202], ["İstiklal", 180, -350]]}
+			["Mısır Çarşısı", -90, 25], ["Sirkeci", 80, 30], ["Galata Köprüsü", 0, -25], ["Karaköy", -40, -75], ["Galata Kulesi", 45, -202], ["İstiklal", 180, -350], ["Taksim", 180, -470]]}
 	var f := FileAccess.open("res://map/istanbul.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))
 	f.close()
