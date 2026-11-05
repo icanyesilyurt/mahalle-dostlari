@@ -5,6 +5,7 @@ extends Node3D
 const AnimalScript := preload("res://scripts/animal.gd")
 const PlayerScript := preload("res://scripts/player.gd")
 const HudScript := preload("res://scripts/hud.gd")
+const NpcScript := preload("res://scripts/npc.gd")
 const TREAT_PRICE := 40
 const PLAY_REWARD := 20
 
@@ -22,6 +23,11 @@ var tram: Node3D
 var tram_s := 0.0
 var tram_dir := 1.0
 var tram_path: Array = []
+var tram2: Node3D
+var tram2_s := 0.0
+var tram2_dir := 1.0
+var npcs: Array = []
+var map_t := 0.0
 var ferries := {}
 var gulls: Array = []
 var D := {}
@@ -59,6 +65,12 @@ func _ready() -> void:
 		ferries[n] = map_root.get_node("Hareketli/" + n)
 	for p in MAP.tram:
 		tram_path.append(Vector3(p[0], 0, p[1]))
+	tram2 = map_root.get_node("Hareketli/TramvayIstiklal")
+	for pth in MAP.npcs:
+		var npc = NpcScript.new()
+		add_child(npc)
+		npc.setup(Vector3(pth[0], 0, pth[1]), Vector3(pth[2], 0, pth[3]))
+		npcs.append(npc)
 	_make_gulls()
 	_make_play_props()
 	_load_save()
@@ -70,6 +82,8 @@ func _ready() -> void:
 	hud.action.connect(_on_action)
 	hud.buy.connect(_on_buy)
 	hud.newday_pressed.connect(_on_new_day)
+	var mb: Array = MAP.bounds
+	hud.set_map(load("res://map/minimap.png"), Rect2(mb[0], mb[1], mb[2], mb[3]), MAP.landmarks)
 	hud.set_hint("Sol taraf: yürü  ·  Sağ taraf: kamerayı çevir" if is_touch else "WASD: yürü  ·  Fareyle sürükle: kamera  ·  Tekerlek: yakınlaştır")
 	_sync_hud()
 	hud.toast("Sultanahmet'e hoş geldin! Balonlu dostlar seni bekliyor", 3.5)
@@ -136,7 +150,7 @@ func _make_gulls() -> void:
 			var piv := Node3D.new(); piv.position = Vector3(s * 0.08, 0, 0); gnode.add_child(piv)
 			var w := MeshInstance3D.new(); w.mesh = wbm; w.material_override = wing_m; w.position = Vector3(s * 0.38, 0, 0); piv.add_child(w)
 		add_child(gnode)
-		var centers := [Vector3(0, 0, -40), Vector3(-30, 0, -30), Vector3(30, 0, -45), Vector3(60, 0, -30)]
+		var centers := [Vector3(0, 0, -25), Vector3(-50, 0, -22), Vector3(40, 0, -30), Vector3(110, 0, -25)]
 		gulls.append({"n": gnode, "c": centers[i % centers.size()], "r": 7.0 + i * 1.6, "a": i * 1.1, "h": 7.0 + (i % 4) * 2.0, "sp": 0.35 + (i % 3) * 0.08, "dive": 0.0, "dp": Vector3.ZERO})
 
 func _make_play_props() -> void:
@@ -208,6 +222,8 @@ func _make_animals() -> void:
 		var n = AnimalScript.new()
 		n.id = a[0]; n.cat = a[1]; n.color = Color(a[2]); n.animal_name = a[3]
 		n.home = Vector3(a[4], a[6], a[5]); n.place_name = a[7]
+		if a.size() > 8:
+			n.pattern = a[8]; n.color2 = Color(a[9]) if a[9] != "" else n.color; n.size = a[10]; n.tagged = a[11]
 		n.cols = COL; n.font = font
 		var r: Dictionary = D.fr.get(n.id, {})
 		n.friend = int(r.get("f", 0))
@@ -426,12 +442,14 @@ func _clear_target(p: Vector3) -> bool:
 		if p.x > c[0] - 0.6 and p.x < c[1] + 0.6 and p.z > c[2] - 0.6 and p.z < c[3] + 0.6:
 			return false
 	var b: Array = MAP.bridge
-	var on_bridge: bool = p.x > b[0] + 0.5 and p.x < b[1] - 0.5 and p.z > b[2] and p.z < b[3]
-	var on_pier: bool = p.x > 22.5 and p.x < 39.5 and p.z > -39.5 and p.z < -22
-	if p.z > -57.5 and p.z < -22.5 and not on_bridge and not on_pier:
-		return false
-	if p.x > 99.5 and p.z > -22.5:
-		return false
+	var pr: Array = MAP.pier
+	if p.x > b[0] + 0.5 and p.x < b[1] - 0.5 and p.z > b[2] and p.z < b[3]:
+		return true
+	if p.x > pr[0] + 0.5 and p.x < pr[1] - 0.5 and p.z > pr[2] + 0.5 and p.z < pr[3]:
+		return true
+	for w in MAP.water:
+		if p.x > w[0] - 0.5 and p.x < w[1] + 0.5 and p.z > w[2] - 0.5 and p.z < w[3] + 0.5:
+			return false
 	return true
 
 func _throw_ball() -> void:
@@ -657,7 +675,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _place_at(x: float, z: float) -> String:
 	var best := ""
 	var best_area := 1e12
-	for p in MAP.places:
+	for p in MAP.roads + MAP.areas:
 		if x >= p[1] and x <= p[2] and z >= p[3] and z <= p[4]:
 			var area: float = (p[2] - p[1]) * (p[4] - p[3])
 			if area < best_area:
@@ -694,9 +712,14 @@ func _process(delta: float) -> void:
 
 	var best = null
 	var bd := 2.4
+	var ppos := Vector2(player.position.x, player.position.z)
 	for a in animals:
-		a.tick(delta, player.global_position, t)
 		var d: float = Vector2(a.position.x - player.position.x, a.position.z - player.position.z).length()
+		var vis: bool = d < 75.0 or a.mode != "" or a.greet
+		a.visible = vis
+		if not vis:
+			continue
+		a.tick(delta, player.global_position, t)
 		if d < bd and a.mode == "":
 			bd = d; best = a
 	near = best
@@ -715,6 +738,18 @@ func _process(delta: float) -> void:
 		hud.show_place(pl)
 
 	_update_movers(delta)
+	for npc in npcs:
+		var dn: float = Vector2(npc.position.x, npc.position.z).distance_to(ppos)
+		npc.visible = dn < 70.0
+		if dn < 90.0:
+			npc.tick(delta)
+	map_t -= delta
+	if map_t <= 0.0:
+		map_t = 0.1
+		var dots := []
+		for a in animals:
+			dots.append([a.position.x, a.position.z, Color("#d9573a") if a.friend > 0 else Color(0.35, 0.38, 0.36, 0.8)])
+		hud.update_map(ppos, player.facing, dots)
 
 func _update_movers(delta: float) -> void:
 	# T1 tramvayı: yol boyunca ileri geri
@@ -735,11 +770,17 @@ func _update_movers(delta: float) -> void:
 			tram.rotation.y = atan2(dir.x, dir.z)
 			break
 		s -= segs[i]
+	tram2_s += tram2_dir * 3.0 * delta
+	var t2a: Array = MAP.tram2[0]; var t2b: Array = MAP.tram2[1]
+	var t2len: float = Vector2(t2b[0] - t2a[0], t2b[1] - t2a[1]).length()
+	if tram2_s > t2len: tram2_dir = -1.0
+	if tram2_s < 0.0: tram2_dir = 1.0
+	tram2.position = Vector3(t2a[0], 0, t2a[1]).lerp(Vector3(t2b[0], 0, t2b[1]), clampf(tram2_s / t2len, 0.0, 1.0))
 	var fb: Node3D = ferries.VapurBogaz
-	fb.position = Vector3(135, sin(t * 0.8) * 0.08, 10 + sin(t * 0.03) * 120)
+	fb.position = Vector3(275, sin(t * 0.8) * 0.08, 40 + sin(t * 0.025) * 230)
 	fb.rotation.y = 0.0 if cos(t * 0.03) > 0 else PI
 	var fh: Node3D = ferries.VapurHalic
-	fh.position = Vector3(-80 + sin(t * 0.04) * 55, sin(t * 0.9) * 0.08, -40)
+	fh.position = Vector3(-130 + sin(t * 0.03) * 90, sin(t * 0.9) * 0.08, -25)
 	fh.rotation.y = PI / 2 if cos(t * 0.04) > 0 else -PI / 2
 	for n in ["VapurIskele", "BalikEkmek1", "BalikEkmek2"]:
 		var bn: Node3D = ferries[n]

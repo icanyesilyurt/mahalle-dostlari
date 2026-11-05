@@ -20,6 +20,10 @@ var wt := 0.0
 var ph := 0.0
 var cols: Array = []
 var font: Font
+var pattern := "solid"      # solid, tekir, smokin, uc_renk, benekli
+var color2 := Color.WHITE
+var size := 1.0
+var tagged := false         # küpeli sokak köpeği
 
 # oyun modu: "" (serbest), "go" (hedefe koş), "wait" (yanında bekle), "chase" (lazer kovala)
 var mode := ""
@@ -105,6 +109,7 @@ func build() -> void:
 		var t2 := _part(tail, Vector3(0.08, 0.08, 0.42), Vector3(0, 0.12, -0.15), m)
 		t2.rotation.x = -0.8
 
+	_decorate(sph)
 	bowl = Node3D.new(); bowl.position = Vector3(-0.2, top_y, 0); add_child(bowl)
 	var cyl := CylinderMesh.new(); cyl.top_radius = 1.0; cyl.bottom_radius = 0.7; cyl.height = 1.0; cyl.radial_segments = 16
 	_part(bowl, Vector3(0.2, 0.1, 0.2), Vector3.ZERO, _mat(Color("#f6c445"), true), cyl)
@@ -125,7 +130,44 @@ func build() -> void:
 	name_label.outline_modulate = Color("#fffaf1")
 	name_label.position = Vector3(0, top_y + 0.4, 0)
 	add_child(name_label)
+	scale = Vector3.ONE * size
 	refresh()
+
+## Desenler: tekir çizgileri, smokin göğüs ve patiler, üç renkli lekeler, benekler, küpe ve tasma
+func _decorate(sph: SphereMesh) -> void:
+	var m2 := _mat(color2)
+	var dark := _mat(color.darkened(0.45))
+	if cat:
+		match pattern:
+			"tekir":
+				var sm := _mat(color2)
+				for k in 4:
+					var st := _part(self, Vector3(0.21, 0.035, 0.05), Vector3(0, 0.52, -0.15 + k * 0.1), sm)
+					st.rotation.x = 0.1
+				_part(head, Vector3(0.03, 0.03, 0.12), Vector3(0, 0.16, 0.02), sm)
+				_part(head, Vector3(0.12, 0.025, 0.03), Vector3(0, 0.12, 0.13), sm)
+			"smokin":
+				_part(self, Vector3(0.12, 0.13, 0.08), Vector3(0, 0.38, 0.17), m2, sph)
+				_part(head, Vector3(0.1, 0.07, 0.06), Vector3(0, -0.06, 0.12), m2, sph)
+				for l in legs:
+					_part(l as Node3D, Vector3(0.08, 0.07, 0.09), Vector3(0, -0.1, 0.005), m2)
+			"uc_renk":
+				_part(self, Vector3(0.12, 0.08, 0.13), Vector3(0.06, 0.48, -0.06), m2, sph)
+				_part(self, Vector3(0.1, 0.07, 0.1), Vector3(-0.07, 0.47, 0.1), _mat(Color("#2b2828")), sph)
+				_part(head, Vector3(0.1, 0.08, 0.1), Vector3(0.07, 0.07, -0.02), m2, sph)
+	else:
+		match pattern:
+			"benekli":
+				for k in 5:
+					_part(self, Vector3(0.07, 0.05, 0.07), Vector3(randf_range(-0.18, 0.18), 0.78 + randf() * 0.04, randf_range(-0.3, 0.3)), m2, sph)
+				_part(head, Vector3(0.08, 0.06, 0.08), Vector3(0.1, 0.12, 0.02), m2, sph)
+		if tagged:
+			# İstanbul sokak köpeklerinin sarı kulak küpesi
+			_part(head, Vector3(0.05, 0.07, 0.02), Vector3(0.26, -0.04, 0.03), _mat(Color("#f2c230")))
+		if randf() < 0.35:
+			_part(self, Vector3(0.28, 0.06, 0.28), Vector3(0, 0.84, 0.36), _mat(Color(["#c8423a", "#3b6aa8", "#2f7d6d"][randi() % 3])))
+	if pattern == "solid" and randf() < 0.3:
+		_part(head, Vector3(0.06, 0.05, 0.05), Vector3(0, 0.08, 0.12 if cat else 0.18), dark, sph)
 
 func refresh() -> void:
 	name_label.text = animal_name

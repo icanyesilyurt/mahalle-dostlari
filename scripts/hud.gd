@@ -37,6 +37,15 @@ var shop_panel: PanelContainer
 var shop_list: VBoxContainer
 var hint: Label
 var joy: Control
+var mm: Control
+var map_panel: PanelContainer
+var map_view: Control
+var map_tex: Texture2D
+var map_bounds := Rect2()
+var landmarks: Array = []
+var m_pos := Vector2.ZERO
+var m_face := 0.0
+var m_dots: Array = []
 var joy_on := false
 var joy_o := Vector2.ZERO
 var joy_v := Vector2.ZERO
@@ -156,6 +165,8 @@ func _ready() -> void:
 	top_btns = HBoxContainer.new()
 	top_btns.add_theme_constant_override("separation", 8)
 	root.add_child(top_btns)
+	var map_btn := _button("Harita", PAPER, INK, 24)
+	top_btns.add_child(map_btn)
 	var shop_btn := _button("Mağaza", PAPER, INK, 24)
 	var book_btn := _button("Defter", PAPER, INK, 24)
 	top_btns.add_child(shop_btn)
@@ -201,10 +212,34 @@ func _ready() -> void:
 		book_panel.visible = not book_panel.visible)
 	shop_btn.pressed.connect(func():
 		book_panel.visible = false
+		map_panel.visible = false
 		shop_panel.visible = not shop_panel.visible)
+	map_btn.pressed.connect(func():
+		book_panel.visible = false
+		shop_panel.visible = false
+		map_panel.visible = not map_panel.visible
+		map_view.queue_redraw())
+	mm = Control.new()
+	mm.custom_minimum_size = Vector2(190, 190)
+	mm.size = Vector2(190, 190)
+	mm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mm.draw.connect(_draw_minimap)
+	root.add_child(mm)
+	var mp := _sheet("İstanbul Haritası")
+	map_panel = mp[0]
+	(mp[1] as Label).text = "Turuncu noktalar tanıştığın dostlar, gri noktalar henüz tanışmadıkların."
+	map_view = Control.new()
+	map_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	map_view.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	map_view.custom_minimum_size = Vector2(300, 300)
+	map_view.draw.connect(_draw_bigmap)
+	var sc_parent: Node = (mp[2] as Control).get_parent()
+	var vb: VBoxContainer = mp[3]
+	vb.remove_child(sc_parent)
+	vb.add_child(map_view)
 
 func is_sheet_open() -> bool:
-	return book_panel.visible or shop_panel.visible
+	return book_panel.visible or shop_panel.visible or map_panel.visible
 
 func set_book(entries: Array, met: int, total: int) -> void:
 	for c in book_list.get_children():
@@ -312,7 +347,7 @@ func _draw_joy() -> void:
 	joy.draw_circle(joy_o + joy_v * 72.0, 38.0, Color(1, 1, 1, 0.8))
 
 func over_ui(pos: Vector2) -> bool:
-	for c in [act_panel, top_btns, book_panel, shop_panel]:
+	for c in [act_panel, top_btns, book_panel, shop_panel, map_panel]:
 		if (c as Control).visible and (c as Control).get_global_rect().has_point(pos):
 			return true
 	return false
@@ -325,7 +360,8 @@ func _process(delta: float) -> void:
 	top_btns.position = Vector2(vs.x - top_btns.size.x - 18, 14)
 	hint.position = Vector2(20, vs.y - hint.size.y - 14)
 	hint.visible = not act_panel.visible
-	for p in [book_panel, shop_panel]:
+	mm.position = Vector2(vs.x - 190 - 18, 70)
+	for p in [book_panel, shop_panel, map_panel]:
 		(p as Control).size = Vector2(minf(660.0, vs.x - 40.0), vs.y - 50.0)
 		(p as Control).position = (vs - (p as Control).size) / 2.0
 	if place_t > 0.0:
@@ -338,3 +374,60 @@ func _process(delta: float) -> void:
 		toast_panel.modulate.a = clampf(toast_t * 3.0, 0.0, 1.0)
 	else:
 		toast_panel.modulate.a = 0.0
+
+# ------------------------------------------------------------ harita
+func set_map(tex: Texture2D, bounds: Rect2, lm: Array) -> void:
+	map_tex = tex
+	map_bounds = bounds
+	landmarks = lm
+
+func update_map(pos: Vector2, face: float, dots: Array) -> void:
+	m_pos = pos
+	m_face = face
+	m_dots = dots
+	mm.queue_redraw()
+	if map_panel.visible:
+		map_view.queue_redraw()
+
+func _arrow(c: Control, at: Vector2, face: float, s: float) -> void:
+	var d := Vector2(sin(face), cos(face))
+	var n := Vector2(-d.y, d.x)
+	c.draw_colored_polygon(PackedVector2Array([at + d * s, at - d * s * 0.6 + n * s * 0.7, at - d * s * 0.3, at - d * s * 0.6 - n * s * 0.7]), ACCENT)
+	c.draw_polyline(PackedVector2Array([at + d * s, at - d * s * 0.6 + n * s * 0.7, at - d * s * 0.3, at - d * s * 0.6 - n * s * 0.7, at + d * s]), INK, 2.0)
+
+func _draw_minimap() -> void:
+	if map_tex == null:
+		return
+	var sz := mm.size
+	var span := 140.0
+	var tp := (m_pos - map_bounds.position) * (map_tex.get_size() / map_bounds.size)
+	var px_per_m := map_tex.get_size().x / map_bounds.size.x
+	var src := Rect2(tp - Vector2(span, span) * px_per_m / 2.0, Vector2(span, span) * px_per_m)
+	mm.draw_rect(Rect2(Vector2.ZERO, sz), Color("#7fb7d1"))
+	mm.draw_texture_rect_region(map_tex, Rect2(Vector2.ZERO, sz), src)
+	var k := sz.x / span
+	for dt in m_dots:
+		var p: Vector2 = (Vector2(dt[0], dt[1]) - m_pos) * k + sz / 2.0
+		if Rect2(Vector2.ZERO, sz).has_point(p):
+			mm.draw_circle(p, 4.0, dt[2])
+	_arrow(mm, sz / 2.0, m_face, 9.0)
+	mm.draw_rect(Rect2(Vector2.ZERO, sz), INK, false, 3.0)
+
+func _draw_bigmap() -> void:
+	if map_tex == null:
+		return
+	var area := map_view.size
+	var ts := map_tex.get_size()
+	var sc := minf(area.x / ts.x, area.y / ts.y)
+	var dsz := ts * sc
+	var off := (area - dsz) / 2.0
+	map_view.draw_texture_rect(map_tex, Rect2(off, dsz), false)
+	map_view.draw_rect(Rect2(off, dsz), INK, false, 2.0)
+	var to_px := func(x: float, z: float) -> Vector2:
+		return off + (Vector2(x, z) - map_bounds.position) / map_bounds.size * dsz
+	for dt in m_dots:
+		map_view.draw_circle(to_px.call(dt[0], dt[1]), 3.5, dt[2])
+	for lm in landmarks:
+		var p: Vector2 = to_px.call(lm[1], lm[2])
+		map_view.draw_string(font, p + Vector2(-60, 0), lm[0], HORIZONTAL_ALIGNMENT_CENTER, 120, 15, INK)
+	_arrow(map_view, to_px.call(m_pos.x, m_pos.y), m_face, 10.0)
