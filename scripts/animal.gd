@@ -68,6 +68,19 @@ var anim: AnimationPlayer
 var wag: Node
 var eat_t := 0.0
 var cur_anim := ""
+# kedi pozları: ayakta, oturma, ekmek (yatma), yalanma
+var rig: Node3D
+var leg_h := 0.24
+var eye_n: Array = []
+var pose := "stand"
+var pose_t := 0.0
+var sit_k := 0.0
+var loaf_k := 0.0
+var groom_k := 0.0
+var blink_t := 2.0
+var look_y := 0.0
+var idle_t := 4.0
+var jumped := false
 
 func build() -> void:
 	ph = randf() * 6.0
@@ -119,6 +132,8 @@ func _build_cat(sph: SphereMesh) -> void:
 	var flat: bool = B.get("flat", false)
 	var pts := pattern == "points"
 	top_y = 1.15
+	rig = Node3D.new(); add_child(rig)
+	leg_h = 0.24 * ls
 	var m := _mat(color)
 	var light := _mat(color.lightened(0.3) if not pts else color.lightened(0.15))
 	var dk := _mat(Color("#2a2623"))
@@ -131,13 +146,13 @@ func _build_cat(sph: SphereMesh) -> void:
 	var shine := _mat(Color.WHITE, true)
 	var lh := 0.24 * ls
 	var bw := 1.0 + fluff * 0.3
-	var body := _part(self, Vector3(0.17 * bw, 0.155 * bw, 0.27 * (1.0 + fluff * 0.15)), Vector3(0, 0.06 + lh, -0.02), m, sph)
+	var body := _part(rig, Vector3(0.17 * bw, 0.155 * bw, 0.27 * (1.0 + fluff * 0.15)), Vector3(0, 0.06 + lh, -0.02), m, sph)
 	body.rotation.x = -0.08
-	_part(self, Vector3(0.12 * bw, 0.12 * bw, 0.17), Vector3(0, 0.03 + lh, 0.06), light, sph)
+	_part(rig, Vector3(0.12 * bw, 0.12 * bw, 0.17), Vector3(0, 0.03 + lh, 0.06), light, sph)
 	if fluff > 0.0:
 		# kabarık göğüs yelesi
-		_part(self, Vector3(0.15, 0.13, 0.1) * (1.0 + fluff * 0.4), Vector3(0, 0.12 + lh, 0.15), light, sph)
-	head = Node3D.new(); head.position = Vector3(0, 0.28 + lh + fluff * 0.03, 0.22 + fluff * 0.02); head.scale = Vector3.ONE * hs; add_child(head)
+		_part(rig, Vector3(0.15, 0.13, 0.1) * (1.0 + fluff * 0.4), Vector3(0, 0.12 + lh, 0.15), light, sph)
+	head = Node3D.new(); head.position = Vector3(0, 0.28 + lh + fluff * 0.03, 0.22 + fluff * 0.02); head.scale = Vector3.ONE * hs; rig.add_child(head)
 	_part(head, Vector3(0.175, 0.155, 0.16 if not flat else 0.13) * (1.0 + fluff * 0.12), Vector3.ZERO, ptm if (pts and false) else m, sph)
 	if pts:
 		_part(head, Vector3(0.1, 0.085, 0.06), Vector3(0, -0.035, 0.11), ptm, sph)
@@ -161,15 +176,19 @@ func _build_cat(sph: SphereMesh) -> void:
 				var tf := _part(head, Vector3(0.015, 0.06, 0.015), Vector3(0.12 * sx, 0.25, -0.01), dk, cone)
 				tf.rotation.z = -0.32 * sx
 		var ez := 0.132 if not flat else 0.11
-		_part(head, Vector3(0.042, 0.048, 0.025), Vector3(0.07 * sx, 0.02, ez), _mat(Color(eyes[i])), sph)
-		_part(head, Vector3(0.024, 0.04, 0.01), Vector3(0.07 * sx, 0.02, ez + 0.02), dk, sph)
-		_part(head, Vector3(0.01, 0.01, 0.006), Vector3(0.078 * sx, 0.035, ez + 0.028), shine, sph)
+		var eye := Node3D.new(); eye.position = Vector3(0.07 * sx, 0.02, ez); head.add_child(eye)
+		_part(eye, Vector3(0.042, 0.048, 0.025), Vector3.ZERO, _mat(Color(eyes[i])), sph)
+		_part(eye, Vector3(0.024, 0.04, 0.01), Vector3(0, 0, 0.02), dk, sph)
+		_part(eye, Vector3(0.01, 0.01, 0.006), Vector3(0.008 * sx, 0.015, 0.028), shine, sph)
+		eye_n.append(eye)
 	for p: Vector2 in [Vector2(-0.075, 0.13), Vector2(0.075, 0.13), Vector2(-0.075, -0.15), Vector2(0.075, -0.15)]:
-		var leg := Node3D.new(); leg.position = Vector3(p.x, lh, p.y); add_child(leg)
+		var leg := Node3D.new(); leg.position = Vector3(p.x, lh, p.y)
+		if p.y > 0.0: rig.add_child(leg)
+		else: add_child(leg)
 		_part(leg, Vector3(0.045, 0.12 * ls, 0.045) * (1.0 + fluff * 0.2), Vector3(0, -0.12 * ls, 0), ptm if pts else m, sph)
 		_part(leg, Vector3(0.05, 0.035, 0.06), Vector3(0, -lh + 0.03, 0.015), ptm if pts else m, sph)
 		legs.append(leg)
-	tail = Node3D.new(); tail.position = Vector3(0, 0.12 + lh, -0.26); add_child(tail)
+	tail = Node3D.new(); tail.position = Vector3(0, 0.12 + lh, -0.26); rig.add_child(tail)
 	var seg: Node3D = tail
 	var bend := [-0.9, -0.35, -0.3, -0.25]
 	var tw := 1.0 + fluff * 1.2
@@ -193,22 +212,22 @@ func _decorate(sph: SphereMesh) -> void:
 	match pattern:
 		"tekir":
 			for k in 4:
-				var st := _part(self, Vector3(0.13, 0.03, 0.035), Vector3(0, 0.2 + lh, -0.16 + k * 0.08), m2, sph)
+				var st := _part(rig, Vector3(0.13, 0.03, 0.035), Vector3(0, 0.2 + lh, -0.16 + k * 0.08), m2, sph)
 				st.rotation.x = 0.1
 			for k in 3:
 				_part(head, Vector3(0.012, 0.012, 0.05), Vector3(-0.03 + k * 0.03, 0.14, 0.06), m2, sph)
 		"smokin":
-			_part(self, Vector3(0.1, 0.11, 0.07), Vector3(0, 0.06 + lh, 0.17), m2, sph)
+			_part(rig, Vector3(0.1, 0.11, 0.07), Vector3(0, 0.06 + lh, 0.17), m2, sph)
 			_part(head, Vector3(0.09, 0.06, 0.05), Vector3(0, -0.07, 0.12), m2, sph)
 			for l in legs:
 				_part(l as Node3D, Vector3(0.052, 0.037, 0.062), Vector3(0, -lh + 0.035, 0.016), m2, sph)
 		"uc_renk":
-			_part(self, Vector3(0.1, 0.07, 0.11), Vector3(0.05, 0.18 + lh, -0.08), m2, sph)
-			_part(self, Vector3(0.08, 0.06, 0.09), Vector3(-0.06, 0.17 + lh, 0.06), _mat(Color("#2b2828")), sph)
+			_part(rig, Vector3(0.1, 0.07, 0.11), Vector3(0.05, 0.18 + lh, -0.08), m2, sph)
+			_part(rig, Vector3(0.08, 0.06, 0.09), Vector3(-0.06, 0.17 + lh, 0.06), _mat(Color("#2b2828")), sph)
 			_part(head, Vector3(0.08, 0.07, 0.08), Vector3(0.06, 0.08, 0.0), m2, sph)
 		"benek":
 			for k in 9:
-				_part(self, Vector3(0.035, 0.02, 0.035), Vector3(randf_range(-0.12, 0.12), 0.17 + lh + randf() * 0.02, randf_range(-0.2, 0.15)), m2, sph)
+				_part(rig, Vector3(0.035, 0.02, 0.035), Vector3(randf_range(-0.12, 0.12), 0.17 + lh + randf() * 0.02, randf_range(-0.2, 0.15)), m2, sph)
 		"solid", "points":
 			if pattern == "solid" and breed == "" and randf() < 0.3:
 				_part(head, Vector3(0.05, 0.04, 0.04), Vector3(0, 0.1, 0.1), _mat(color.darkened(0.45)), sph)
@@ -272,7 +291,7 @@ func _build_dog(sph: SphereMesh) -> void:
 		shp.setup(sc, rt)
 		sk.add_child(shp)
 	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	for n in ["Idle", "Walk", "Gallop", "Eating", "Idle_2"]:
+	for n in ["Idle", "Walk", "Gallop", "Eating", "Idle_2", "Idle_2_HeadLow"]:
 		if anim.has_animation(n):
 			anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 	anim.play("Idle")
@@ -301,6 +320,63 @@ func _build_dog(sph: SphereMesh) -> void:
 		var tor := TorusMesh.new(); tor.inner_radius = 0.8; tor.outer_radius = 1.0; tor.rings = 16; tor.ring_segments = 6
 		var c := _part(neck, Vector3(0.13, 0.13, 0.13) * inv, Vector3.ZERO, _mat(Color(["#c8423a", "#3b6aa8", "#2f7d6d"][randi() % 3])), tor)
 		c.rotation.x = PI / 2.0
+
+func _cat_pose(delta: float, moving: bool, t: float, wag_on: bool, flat: Vector3) -> void:
+	var resting := not moving and mode == "" and not greet and eat_t <= 0.0
+	pose_t -= delta
+	if not resting:
+		if moving and pose != "stand":
+			pose = "stand"; pose_t = randf_range(3.0, 6.0)
+	elif pose_t <= 0.0:
+		pose_t = randf_range(5.0, 11.0)
+		var r := randf()
+		pose = "stand" if r < 0.25 else ("sit" if r < 0.55 else ("loaf" if r < 0.85 else "groom"))
+	var k := minf(1.0, delta * 3.0)
+	sit_k = lerpf(sit_k, 1.0 if pose in ["sit", "groom"] else 0.0, k)
+	loaf_k = lerpf(loaf_k, 1.0 if pose == "loaf" else 0.0, k)
+	groom_k = lerpf(groom_k, 1.0 if pose == "groom" else 0.0, k)
+	# gövde arka kalçadan döner (oturma), yatınca alçalır
+	var pivot := Vector3(0, leg_h, -0.17)
+	var bas := Basis(Vector3.RIGHT, -0.42 * sit_k)
+	rig.transform = Transform3D(bas, pivot - bas * pivot + Vector3(0, -leg_h * 0.8 * loaf_k, 0))
+	var sw := sin(ph) * 0.6 if moving else 0.0
+	for i in legs.size():
+		var lg := legs[i] as Node3D
+		var front := i < 2
+		var sgn := 1.0 if i % 2 == 0 else -1.0
+		lg.rotation.x = sw * sgn * (1.0 if front else -1.0)
+		var sy := 1.0 - 0.85 * loaf_k
+		if front:
+			lg.rotation.x += 0.42 * sit_k
+			sy *= 1.0 + 0.5 * sit_k
+		else:
+			sy *= 1.0 - 0.45 * sit_k
+		lg.scale.y = maxf(0.12, sy)
+	if groom_k > 0.05 and legs.size() > 0:
+		# ön patiyi yalayıp yüzünü siler
+		(legs[0] as Node3D).rotation.x -= groom_k * (1.3 + sin(t * 6.0) * 0.25)
+	tail.rotation.y = sin(t * (14.0 if wag_on else 1.6) + ph) * (0.7 if wag_on else 0.3)
+	tail.rotation.x = 0.6 * maxf(sit_k, loaf_k)
+	# başı oyuncuya çevir, göz kırp
+	var to := flat - global_position
+	var want := 0.0
+	if to.length() < 6.0 and not moving:
+		want = clampf(wrapf(atan2(to.x, to.z) - global_rotation.y, -PI, PI), -0.9, 0.9)
+	look_y = lerpf(look_y, want, minf(1.0, delta * 4.0))
+	head.rotation.y = look_y + groom_k * 0.4
+	head.rotation.x = sin(t * 0.7 + ph) * 0.08 + groom_k * (0.45 + sin(t * 6.0) * 0.12)
+	if eat_t > 0.0 and not moving:
+		head.rotation.x = 0.45 + sin(t * 9.0) * 0.08
+	blink_t -= delta
+	var bl := 1.0
+	if blink_t < 0.12:
+		bl = 0.1
+		if blink_t <= 0.0:
+			blink_t = randf_range(2.0, 5.0)
+	if loaf_k > 0.7 and pose == "loaf" and pose_t < 4.0:
+		bl = 0.15  # ekmek pozunda gözlerini yumar
+	for e in eye_n:
+		(e as Node3D).scale.y = bl
 
 func _play(n: String, blend := 0.2) -> void:
 	if anim and cur_anim != n:
@@ -386,7 +462,9 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 		wt -= delta
 		if wt <= 0.0:
 			wt = 3.0 + randf() * 5.0
-			target = home + Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.8, 0.8))
+			# poz vermiş kedi yerinden kalkmasın
+			if not cat or pose == "stand" or randf() < 0.15:
+				target = home + Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.8, 0.8))
 		var to2 := Vector3(target.x - position.x, 0, target.z - position.z)
 		var d4 := to2.length()
 		if d4 > 0.08:
@@ -411,19 +489,25 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 		elif moving:
 			var fast := mode != "" or greet or Vector2(target.x - position.x, target.z - position.z).length() > 3.0
 			_play("Gallop" if fast else "Walk")
-		else:
+		elif not cur_anim.begins_with("Idle") and not (cur_anim == "Jump_ToIdle" and anim.is_playing() and anim.current_animation_position < anim.current_animation_length - 0.05):
 			_play("Idle")
 		wag.amount = lerpf(wag.amount, 1.0 if wag_on else 0.15, minf(1.0, delta * 5.0))
 	else:
-		var sw := sin(ph) * 0.6 if moving else 0.0
-		for i in legs.size():
-			var sgn := 1.0 if i % 2 == 0 else -1.0
-			var front := 1.0 if i < 2 else -1.0
-			(legs[i] as Node3D).rotation.x = sw * sgn * front
-		tail.rotation.y = sin(t * (14.0 if wag_on else 2.0) + ph) * (0.7 if wag_on else 0.25)
-		head.rotation.x = sin(t * 0.7 + ph) * 0.08
-		if eat_t > 0.0 and not moving:
-			head.rotation.x = 0.45 + sin(t * 9.0) * 0.08
+		_cat_pose(delta, moving, t, wag_on, flat)
+	if anim and not moving and eat_t <= 0.0:
+		# köpek boşta: arada başını eğip koklar, etrafa bakar
+		idle_t -= delta
+		if idle_t <= 0.0:
+			idle_t = randf_range(4.0, 9.0)
+			if cur_anim == "Idle":
+				_play(["Idle_2", "Idle_2_HeadLow", "Idle"][randi() % 3], 0.3)
+			else:
+				_play("Idle", 0.3)
+		if happy > 1.8 and not jumped:
+			jumped = true
+			_play("Jump_ToIdle", 0.1)
+	if happy <= 0.0:
+		jumped = false
 	var bob := sin(t * 3.0 + ph) * 0.05
 	bowl.position.y = top_y + bob
 	drop.position.y = top_y + bob

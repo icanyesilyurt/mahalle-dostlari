@@ -11,6 +11,35 @@ var moving := false
 var look := "character-male-a"
 var act_t := 0.0
 
+## Kıyafet / saç renkleri: palet hücreleri karakter başına
+const PARTS := {
+	"character-male-a": {"shirt": ["body", Vector2(3, 2)], "pants": ["body", Vector2(11, 2)], "hair": ["head", Vector2(1, 3)]},
+	"character-female-c": {"shirt": ["body", Vector2(11, 2)], "pants": ["body", Vector2(3, 3)], "hair": ["head", Vector2(3, 3)]},
+}
+var colors := {}   # "shirt"/"pants"/"hair" -> Color
+const CharShader := preload("res://map/char.gdshader")
+
+func apply_colors() -> void:
+	if model == null or not PARTS.has(look):
+		return
+	var tex: Texture2D = load("res://assets/chars/Textures/colormap.png")
+	var P: Dictionary = PARTS[look]
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		var which := "head" if str(m.name).begins_with("head") else "body"
+		var sm := ShaderMaterial.new()
+		sm.shader = CharShader
+		sm.set_shader_parameter("tex", tex)
+		var slots := ["a", "b", "c"]
+		var si := 0
+		for part in ["shirt", "pants", "hair"]:
+			if colors.has(part) and P[part][0] == which:
+				sm.set_shader_parameter("cell_" + slots[si], P[part][1])
+				sm.set_shader_parameter("col_" + slots[si], colors[part])
+				si += 1
+		for sidx in m.mesh.get_surface_count():
+			m.set_surface_override_material(sidx, sm)
+
 ## Görünüşü değiştir (Kenney Mini Characters)
 func set_look(id: String) -> void:
 	look = id
@@ -26,6 +55,7 @@ func set_look(id: String) -> void:
 				anim.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 		_calm_bounce(anim.get_animation("walk"), 0.35)
 		anim.play("idle")
+	apply_colors()
 
 ## Yürürken gövdenin yukarı aşağı zıplamasını azalt (Kenney animasyonunda kök kemik sekiyor)
 static func _calm_bounce(a: Animation, k: float) -> void:

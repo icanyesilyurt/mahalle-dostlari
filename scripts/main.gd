@@ -9,6 +9,9 @@ const NpcScript := preload("res://scripts/npc.gd")
 const TREAT_PRICE := 40
 const Breeds := preload("res://scripts/breeds.gd")
 const LOOKS := ["character-male-a", "character-female-c"]
+const COLOR_PRICE := 50
+const CLOTH_COLS := ["#c8423a", "#e2a33b", "#2f7d6d", "#3b6aa8", "#8e3b5a", "#f2efe9", "#2b2b2b", "#d98aa0", "#6b4f3a", "#5a7f3b", "#7cc6ea", "#9a5ac8"]
+const HAIR_COLS := ["#2b2320", "#5a3a28", "#8a5a32", "#c9a46a", "#e8d8a8", "#b8442a", "#8a8a8a", "#1a1a1a", "#d98aa0", "#3b6aa8"]
 var pet_node = null
 const PLAY_REWARD := 20
 
@@ -83,6 +86,7 @@ func _ready() -> void:
 	_make_player()
 	_make_animals()
 	_spawn_pet()
+	_apply_player_colors()
 
 	hud = HudScript.new()
 	add_child(hud)
@@ -338,6 +342,15 @@ func _pet_items() -> Array:
 				"price": "%d puan" % int(tbl[k].price), "enabled": int(D.pts) >= int(tbl[k].price)})
 	return items
 
+func _apply_player_colors() -> void:
+	var cur: Dictionary = D.get("cols", {})
+	player.colors.clear()
+	for part in ["shirt", "pants", "hair"]:
+		if cur.has(part + "_i"):
+			var pal: Array = HAIR_COLS if part == "hair" else CLOTH_COLS
+			player.colors[part] = Color(pal[int(cur[part + "_i"]) % pal.size()])
+	player.apply_colors()
+
 func _adopt(id: String) -> void:
 	var key := id.substr(4)
 	var p := key.split(":")
@@ -465,7 +478,10 @@ func _sync_hud() -> void:
 	hud.set_shop([
 		{"id": "treat", "title": "Ödül maması", "sub": "Oyundan sonra ver. Dostluğunu bir kat artırır.", "price": "%d puan" % TREAT_PRICE, "enabled": int(D.pts) >= TREAT_PRICE},
 		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4},
-		{"id": "look", "title": "Kadın / erkek karakter", "sub": "Karakterini değiştir. Kıyafet ve saç renkleri yakında.", "price": "Değiştir", "enabled": true}] + _pet_items())
+		{"id": "look", "title": "Kadın / erkek karakter", "sub": "Karakterini değiştir.", "price": "Değiştir", "enabled": true},
+		{"id": "col:shirt", "title": "Üst rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE},
+		{"id": "col:pants", "title": "Pantolon / etek rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE},
+		{"id": "col:hair", "title": "Saç rengi", "sub": "Sıradaki renge geç.", "price": "%d puan" % COLOR_PRICE, "enabled": int(D.pts) >= COLOR_PRICE}] + _pet_items())
 
 # --- eylem kartı ---
 func _on_bridge_rail() -> bool:
@@ -516,7 +532,21 @@ func _on_buy(id: String) -> void:
 		var i := (LOOKS.find(player.look) + 1) % LOOKS.size()
 		player.set_look(LOOKS[i])
 		D.ch = LOOKS[i]
+		_apply_player_colors()
 		_save()
+		return
+	if id.begins_with("col:"):
+		if int(D.pts) < COLOR_PRICE:
+			return
+		var part := id.substr(4)
+		var pal: Array = HAIR_COLS if part == "hair" else CLOTH_COLS
+		var cur: Dictionary = D.get("cols", {})
+		var i := (int(cur.get(part + "_i", -1)) + 1) % pal.size()
+		cur[part + "_i"] = i
+		D.cols = cur
+		D.pts = int(D.pts) - COLOR_PRICE
+		_apply_player_colors()
+		_save(); _sync_hud()
 		return
 	if id.begins_with("pet:"):
 		_adopt(id)

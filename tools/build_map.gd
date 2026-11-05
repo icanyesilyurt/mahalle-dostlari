@@ -286,6 +286,28 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 				var px := cx + ux * e * (w / 2.0 - 0.18)
 				var pz := cz + uz * e * (w / 2.0 - 0.18)
 				g.box(0.36, h - gf, d + 0.16, px, gf, pz, trim, ry)
+		# pencere kanatları (ahşap evler) ve çiçekli pencere önleri
+		if kind == "ahsap" or rng.randf() < 0.25:
+			var fw := w - 0.04
+			var reps := maxf(1.0, roundf(fw / 2.6))
+			var mw := fw / reps
+			var shc := pick(["#3f6b4a", "#5a3a28", "#2f4f6f", "#7a2f2a", "#6b6f4a"])
+			for fl in floors - 1:
+				var ytop := h - fl * fh
+				var wy0 := ytop - 0.84 * fh
+				var wh := 0.73 * fh
+				for q in int(reps):
+					var cu := -fw / 2.0 + (q + 0.5) * mw
+					var px := fx + ux * cu + nx * 0.06
+					var pz := fz + uz * cu + nz * 0.06
+					if kind == "ahsap":
+						for e: float in [-1.0, 1.0]:
+							g.box(mw * 0.17, wh, 0.06, px + ux * e * mw * 0.36, wy0, pz + uz * e * mw * 0.36, shc, ry)
+					elif fl == floors - 2 and rng.randf() < 0.6:
+						g.box(mw * 0.5, 0.22, 0.32, px + nx * 0.12, wy0 - 0.22, pz + nz * 0.12, C("#8a5a3c"), ry)
+						for f2 in 3:
+							var fo := (f2 - 1) * mw * 0.15
+							g.put("ico", Vector3(px + ux * fo + nx * 0.14, wy0 + 0.05, pz + uz * fo + nz * 0.14), pick(["#e0483a", "#d98aa0", "#f2c230", "#5f8f45"]), rng.randf(), Vector3(0.22, 0.2, 0.22))
 		var eave := 1.3 if kind == "ahsap" else 0.5
 		g.box(w + 0.25, 0.3, d + 0.25, cx, h - 0.15, cz, trim, ry)
 		if kind == "ahsap":
