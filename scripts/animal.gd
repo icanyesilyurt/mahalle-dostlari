@@ -104,6 +104,7 @@ var pose_t := 0.0
 var sit_k := 0.0
 var loaf_k := 0.0
 var groom_k := 0.0
+var side_k := 0.0
 var blink_t := 2.0
 var look_y := 0.0
 var idle_t := 4.0
@@ -371,15 +372,32 @@ func _cat_pose(delta: float, moving: bool, t: float, wag_on: bool, flat: Vector3
 	elif pose_t <= 0.0:
 		pose_t = randf_range(5.0, 11.0)
 		var r := randf()
-		pose = "stand" if r < 0.25 else ("sit" if r < 0.55 else ("loaf" if r < 0.85 else "groom"))
+		pose = "stand" if r < 0.2 else ("sit" if r < 0.45 else ("loaf" if r < 0.7 else ("groom" if r < 0.82 else "sleep")))
+		if pose == "sleep":
+			pose_t = randf_range(15.0, 30.0)
 	var k := minf(1.0, delta * 3.0)
 	sit_k = lerpf(sit_k, 1.0 if pose in ["sit", "groom"] else 0.0, k)
-	loaf_k = lerpf(loaf_k, 1.0 if pose == "loaf" else 0.0, k)
+	loaf_k = lerpf(loaf_k, 1.0 if pose in ["loaf", "sleep"] else 0.0, k)
+	side_k = lerpf(side_k, 1.0 if pose == "sleep" else 0.0, k * 0.6)
+	var near_p := Vector2(flat.x - global_position.x, flat.z - global_position.z).length() < 2.5
+	if pose == "sleep" and near_p:
+		pose = "sit"; pose_t = randf_range(4.0, 8.0)
+	_zzz(pose == "sleep" and side_k > 0.6)
 	groom_k = lerpf(groom_k, 1.0 if pose == "groom" else 0.0, k)
 	# gövde arka kalçadan döner (oturma), yatınca alçalır
 	var pivot := Vector3(0, leg_h, -0.17)
 	var bas := Basis(Vector3.RIGHT, -0.42 * sit_k)
-	rig.transform = Transform3D(bas, pivot - bas * pivot + Vector3(0, -leg_h * 0.8 * loaf_k, 0))
+	var tr := Transform3D(bas, pivot - bas * pivot + Vector3(0, -leg_h * 0.8 * loaf_k, 0))
+	if side_k > 0.01:
+		# yan yatıp kıvrılır
+		var sb := Basis(Vector3.FORWARD, 1.25 * side_k)
+		tr = Transform3D(sb, Vector3(0.1 * side_k, 0.0, 0)) * tr
+		for lg in legs:
+			(lg as Node3D).visible = side_k < 0.5
+	else:
+		for lg in legs:
+			(lg as Node3D).visible = true
+	rig.transform = tr
 	var sw := sin(ph) * 0.6 if moving else 0.0
 	for i in legs.size():
 		var lg := legs[i] as Node3D
@@ -414,10 +432,36 @@ func _cat_pose(delta: float, moving: bool, t: float, wag_on: bool, flat: Vector3
 		bl = 0.1
 		if blink_t <= 0.0:
 			blink_t = randf_range(2.0, 5.0)
-	if loaf_k > 0.7 and pose == "loaf" and pose_t < 4.0:
+	if side_k > 0.5 or (loaf_k > 0.7 and pose == "loaf" and pose_t < 4.0):
 		bl = 0.15  # ekmek pozunda gözlerini yumar
 	for e in eye_n:
 		(e as Node3D).scale.y = bl
+
+var sleeping := false
+var zzz: Label3D
+
+func _zzz(on: bool) -> void:
+	if on and zzz == null:
+		zzz = Label3D.new()
+		zzz.text = "z z z"
+		zzz.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		zzz.font = font
+		zzz.font_size = 40
+		zzz.pixel_size = 0.005
+		zzz.modulate = Color("#6f86b8")
+		zzz.outline_size = 8
+		zzz.position = Vector3(0.2, 0.7, 0.2)
+		add_child(zzz)
+	if zzz:
+		zzz.visible = on
+
+func _wake() -> void:
+	sleeping = false
+	_zzz(false)
+	if anim:
+		anim.play("Idle", 0.5)
+		cur_anim = "Idle"
+	pose = "stand"
 
 func _play(n: String, blend := 0.2) -> void:
 	if anim and cur_anim != n:
@@ -532,6 +576,8 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 		elif moving:
 			var fast := mode != "" or greet or Vector2(target.x - position.x, target.z - position.z).length() > 3.0
 			_play("Gallop" if fast else "Walk")
+		elif sleeping:
+			pass
 		elif not cur_anim.begins_with("Idle") and not (cur_anim == "Jump_ToIdle" and anim.is_playing() and anim.current_animation_position < anim.current_animation_length - 0.05):
 			_play("Idle")
 		wag.amount = lerpf(wag.amount, 1.0 if wag_on else 0.15, minf(1.0, delta * 5.0))
@@ -540,12 +586,28 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 	if anim and not moving and eat_t <= 0.0:
 		# köpek boşta: arada başını eğip koklar, etrafa bakar
 		idle_t -= delta
-		if idle_t <= 0.0:
+		var pd := Vector2(flat.x - position.x, flat.z - position.z).length()
+		if sleeping and (pd < 2.5 or greet or mode != "" or happy > 0.0):
+			_wake()
+		elif idle_t <= 0.0:
 			idle_t = randf_range(4.0, 9.0)
-			if cur_anim == "Idle":
+			if sleeping:
+				idle_t = randf_range(12.0, 25.0)
+			elif mode == "" and pd > 5.0 and randf() < 0.22:
+				# yan yatıp uyur (ölme animasyonunun son karesi = yan yatış)
+				sleeping = true
+				idle_t = randf_range(15.0, 30.0)
+				anim.play("Death", 0.6)
+				cur_anim = "Death"
+				_zzz(true)
+			elif cur_anim == "Idle":
 				_play(["Idle_2", "Idle_2_HeadLow", "Idle"][randi() % 3], 0.3)
 			else:
 				_play("Idle", 0.3)
+		if sleeping and cur_anim == "Death" and not anim.is_playing():
+			pass
+		if sleeping and anim.current_animation_position > anim.current_animation_length - 0.08:
+			anim.pause()
 		if happy > 1.8 and not jumped:
 			jumped = true
 			_play("Jump_ToIdle", 0.1)

@@ -24,7 +24,7 @@ func setup(pa: Vector3, pb: Vector3, skip := "") -> void:
 	if not scenes.has(id):
 		scenes[id] = load("res://assets/chars/%s.glb" % id)
 	var model: Node3D = (scenes[id] as PackedScene).instantiate()
-	model.scale = Vector3.ONE * randf_range(2.1, 2.35)
+	model.scale = Vector3.ONE * randf_range(1.9, 2.15)
 	add_child(model)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

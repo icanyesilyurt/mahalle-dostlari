@@ -46,7 +46,7 @@ func set_look(id: String) -> void:
 	if model:
 		model.queue_free()
 	model = (load("res://assets/chars/%s.glb" % id) as PackedScene).instantiate()
-	model.scale = Vector3.ONE * 2.3
+	model.scale = Vector3.ONE * 2.05
 	add_child(model)
 	anim = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if anim:

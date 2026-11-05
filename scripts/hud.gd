@@ -346,10 +346,10 @@ func _draw_joy() -> void:
 	if not joy_on:
 		return
 	var a := 1.0 if joy_active else 0.55
-	joy.draw_circle(joy_o, 75.0, Color(0.14, 0.19, 0.17, 0.22 * a))
-	joy.draw_arc(joy_o, 75.0, 0.0, TAU, 48, Color(1, 1, 1, 0.7 * a), 5.0)
-	joy.draw_circle(joy_o + joy_v * 60.0, 34.0, Color(1, 0.98, 0.94, 0.9 * a))
-	joy.draw_arc(joy_o + joy_v * 60.0, 34.0, 0.0, TAU, 32, Color(INK, 0.6 * a), 3.0)
+	joy.draw_circle(joy_o, 85.0, Color(0.14, 0.19, 0.17, 0.22 * a))
+	joy.draw_arc(joy_o, 85.0, 0.0, TAU, 48, Color(1, 1, 1, 0.7 * a), 5.0)
+	joy.draw_circle(joy_o + joy_v * 68.0, 34.0, Color(1, 0.98, 0.94, 0.9 * a))
+	joy.draw_arc(joy_o + joy_v * 68.0, 34.0, 0.0, TAU, 32, Color(INK, 0.6 * a), 3.0)
 
 func over_ui(pos: Vector2) -> bool:
 	for c in [act_panel, top_btns, book_panel, shop_panel, map_panel]:

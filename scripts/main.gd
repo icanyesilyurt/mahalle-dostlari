@@ -51,7 +51,8 @@ var joy_id := -1
 var joy_o := Vector2.ZERO
 var joy_v := Vector2.ZERO
 var joy_raw := Vector2.ZERO
-const JOY_R := 75.0
+const JOY_R := 85.0
+var out_cam := 5.5
 var look_id := -1
 var mouse_drag := false
 var t := 0.0
@@ -67,6 +68,10 @@ var fish_cd := 0.0
 func _ready() -> void:
 	font = load("res://assets/fonts/ui_font.tres")
 	is_touch = DisplayServer.is_touchscreen_available()
+	if is_touch:
+		# telefonda karakter daha küçük görünsün, etraf daha çok görünsün
+		out_cam = 7.4
+		cam_pitch = -0.3
 	var f := FileAccess.open("res://map/istanbul.json", FileAccess.READ)
 	MAP = JSON.parse_string(f.get_as_text())
 	COL = MAP.col
@@ -297,7 +302,7 @@ func _make_player() -> void:
 	pivot.top_level = true
 	add_child(pivot)
 	spring = SpringArm3D.new()
-	spring.spring_length = 5.5
+	spring.spring_length = out_cam
 	spring.margin = 0.25
 	var ss := SphereShape3D.new()
 	ss.radius = 0.3
@@ -378,7 +383,7 @@ func _exit_home() -> void:
 	player.position = Vector3(MAP.home[0] + 1.2, 0, MAP.home[1])
 	player.facing = PI / 2.0
 	cam_yaw = -PI / 2.0
-	spring.spring_length = 5.5
+	spring.spring_length = out_cam
 	pivot.global_position = player.position + Vector3(0, 1.5, 0)
 	if pet_node:
 		pet_node.position = player.position + Vector3(1.0, 0, 1.0)
@@ -923,8 +928,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if e.pressed:
 			if hud.over_ui(e.position):
 				return
-			if e.position.x < vs.x * 0.5 and e.position.y > vs.y * 0.25 and joy_id == -1:
-				joy_id = e.index; joy_o = e.position; joy_raw = Vector2.ZERO
+			var jh := Vector2(JOY_R + 95.0, vs.y - JOY_R - 95.0)
+			if joy_id == -1 and (e.position.distance_to(jh) < JOY_R * 2.3 or (e.position.x < vs.x * 0.3 and e.position.y > vs.y * 0.45)):
+				# sabit joystick: halka yerinde durur, parmağın yönü okunur
+				joy_id = e.index; joy_o = jh
+				joy_raw = (e.position - jh).limit_length(JOY_R) / JOY_R
 			elif look_id == -1:
 				look_id = e.index
 		else:
@@ -935,12 +943,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag:
 		var d := event as InputEventScreenDrag
 		if d.index == joy_id:
-			var off := d.position - joy_o
-			# parmak halkanın dışına çıkarsa halka da peşinden gelir
-			if off.length() > JOY_R:
-				joy_o = d.position - off.normalized() * JOY_R
-				off = d.position - joy_o
-			joy_raw = off / JOY_R
+			joy_raw = (d.position - joy_o).limit_length(JOY_R) / JOY_R
 		elif d.index == look_id:
 			var k := 1100.0 / maxf(vs.x, 600.0)
 			cam_yaw -= d.relative.x * 0.0055 * k
@@ -998,9 +1001,7 @@ func _process(delta: float) -> void:
 	joy_v = joy_v.lerp(jr, minf(1.0, delta * 18.0))
 	if is_touch or joy_id != -1:
 		var vsz := get_viewport().get_visible_rect().size
-		var home := Vector2(150.0, vsz.y - 150.0)
-		if joy_id == -1:
-			joy_o = joy_o.lerp(home, minf(1.0, delta * 8.0)) if joy_o != Vector2.ZERO else home
+		joy_o = Vector2(JOY_R + 95.0, vsz.y - JOY_R - 95.0)
 		hud.set_joy(true, joy_o, joy_v, joy_id != -1)
 	var fwd := -Vector3(sin(cam_yaw), 0, cos(cam_yaw))
 	var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
