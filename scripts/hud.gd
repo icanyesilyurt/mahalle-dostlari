@@ -238,6 +238,38 @@ func _ready() -> void:
 	vb.remove_child(sc_parent)
 	vb.add_child(map_view)
 
+var rotate_panel: Control
+## Telefon dik tutulunca: "yan çevir" uyarısı (oyun yatay oynanır)
+func set_rotate(on: bool) -> void:
+	if rotate_panel == null:
+		var bg := ColorRect.new()
+		bg.color = Color("#3f93b8")
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.mouse_filter = Control.MOUSE_FILTER_STOP
+		var v := VBoxContainer.new()
+		v.set_anchors_preset(Control.PRESET_CENTER)
+		v.alignment = BoxContainer.ALIGNMENT_CENTER
+		v.add_theme_constant_override("separation", 18)
+		bg.add_child(v)
+		# telefon çizimi: yatay duran beyaz çerçeve
+		var icon := CenterContainer.new()
+		var ph := Panel.new()
+		ph.custom_minimum_size = Vector2(150, 86)
+		ph.add_theme_stylebox_override("panel", _box(Color(1, 1, 1, 0.12), PAPER, 16, 6))
+		icon.add_child(ph)
+		var t := _label("Telefonunu yan çevir", 48, PAPER)
+		t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var t2 := _label("Mahalle Dostları yatay ekranda oynanır", 28, Color(PAPER, 0.85))
+		t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		v.add_child(icon); v.add_child(t); v.add_child(t2)
+		root.add_child(bg)
+		rotate_panel = bg
+	rotate_panel.visible = on
+	if on:
+		var vs := root.get_viewport_rect().size
+		var v2: Control = rotate_panel.get_child(0)
+		v2.position = (vs - v2.get_combined_minimum_size()) / 2.0
+
 func is_sheet_open() -> bool:
 	return book_panel.visible or shop_panel.visible or map_panel.visible
 

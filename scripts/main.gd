@@ -104,6 +104,21 @@ func _ready() -> void:
 		add_child(npc)
 		npc.setup(Vector3(pth[0], 0, pth[1]), Vector3(pth[2], 0, pth[3]))
 		npcs.append(npc)
+	# seyyar satıcılar: arabanın başında durur
+	for v in MAP.get("vendors", []):
+		var sv = NpcScript.new()
+		add_child(sv)
+		var vp := Vector3(v[0], 0, v[1])
+		sv.setup(vp, vp)
+		sv.position = vp
+		sv.rotation.y = float(v[2])
+		sv.still = true
+		npcs.append(sv)
+	# tramvaylara çarpışma kutusu: içinden geçilmez
+	if tram:
+		_body_box(tram, Vector3(2.8, 3.2, 29.0))
+	if tram2:
+		_body_box(tram2, Vector3(2.8, 3.2, 9.0))
 	_make_gulls()
 	_make_pigeons()
 	_make_play_props()
@@ -123,6 +138,7 @@ func _ready() -> void:
 	hud.action.connect(_on_action)
 	hud.buy.connect(_on_buy)
 	hud.newday_pressed.connect(_on_new_day)
+	_fit_screen.call_deferred()
 	var mb: Array = MAP.bounds
 	hud.set_map(load("res://map/%s_mini.png" % city), Rect2(mb[0], mb[1], mb[2], mb[3]), MAP.landmarks)
 	hud.set_hint("Sol taraf: yürü  ·  Sağ taraf: kamerayı çevir" if is_touch else "WASD: yürü  ·  Fareyle sürükle: kamera  ·  Tekerlek: yakınlaştır")
@@ -158,7 +174,14 @@ func _make_environment() -> void:
 	sun.light_energy = 0.62
 	sun.light_color = Color("#ffe6c4")
 	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 55.0
+	# titremeyen gölge: iki dilim, yumuşak geçiş, uzakta yavaşça solar
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	sun.directional_shadow_max_distance = 80.0
+	sun.directional_shadow_split_1 = 0.25
+	sun.directional_shadow_blend_splits = true
+	sun.directional_shadow_fade_start = 0.7
+	sun.shadow_bias = 0.12
+	sun.shadow_normal_bias = 2.2
 	add_child(sun)
 	# su
 	var water := MeshInstance3D.new()
@@ -458,6 +481,8 @@ func _fit_screen() -> void:
 		ws = Vector2(get_tree().root.size)
 	var portrait := ws.y > ws.x
 	get_tree().root.content_scale_size = Vector2i(720, 1280) if portrait else Vector2i(1280, 720)
+	if hud:
+		hud.set_rotate(portrait and is_touch)
 	if camera:
 		if portrait:
 			# dikeyde yatay görüşü sabit tut: karakter devleşmesin, etraf görünsün
@@ -469,6 +494,46 @@ func _fit_screen() -> void:
 			camera.keep_aspect = Camera3D.KEEP_HEIGHT
 			camera.fov = 64.0
 			camera.v_offset = 0.0
+
+func _body_box(n: Node3D, size: Vector3) -> void:
+	var ab := AnimatableBody3D.new()
+	ab.sync_to_physics = false
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new(); bs.size = size
+	cs.shape = bs
+	cs.position.y = size.y / 2.0
+	ab.add_child(cs)
+	n.add_child(ab)
+
+## Oyuncu yayaların ve hayvanların içinden geçmesin: yumuşakça kenara itilir
+func _separate(delta: float) -> void:
+	var pp := Vector2(player.position.x, player.position.z)
+	var push := Vector2.ZERO
+	for n in npcs:
+		if not n.visible:
+			continue
+		var d := pp - Vector2(n.position.x, n.position.z)
+		var L := d.length()
+		if L < 0.75 and L > 0.001:
+			push += d / L * (0.75 - L)
+	for a in animals:
+		if not a.visible:
+			continue
+		var r: float = (0.42 if a.cat else 0.6) * float(a.size)
+		var d2 := pp - Vector2(a.position.x, a.position.z)
+		var L2 := d2.length()
+		if L2 < r + 0.35 and L2 > 0.001:
+			push += d2 / L2 * (r + 0.35 - L2)
+	if pet_node:
+		var d3 := pp - Vector2(pet_node.position.x, pet_node.position.z)
+		var L3 := d3.length()
+		if L3 < 0.8 and L3 > 0.001:
+			push += d3 / L3 * (0.8 - L3) * 0.5
+	if push.length() > 0.0:
+		var step := push.limit_length(4.0 * delta + push.length() * 0.5)
+		var mv := player.move_and_collide(Vector3(step.x, 0, step.y), true)
+		if mv == null:
+			player.position += Vector3(step.x, 0, step.y)
 
 func _load_save_city() -> void:
 	# kayıt dosyasından hangi şehirde olduğumuzu oku (kayıt asıl _load_save ile yüklenir)
@@ -1159,6 +1224,7 @@ func _process(delta: float) -> void:
 		if d < bd and a.mode == "":
 			bd = d; best = a
 	near = best
+	_separate(delta)
 	_update_play(delta)
 	_update_actions()
 

@@ -21,6 +21,7 @@ var squares: Array = []      # mini harita için meydanlar
 var animals: Array = []
 var npc_paths: Array = []
 var chunk_cells := {}
+var vendors: Array = []
 var city_id := "istanbul"
 var lands: Array = [[-225, 237, 0, 295], [-150, 230, -265, -50], [120, 240, -505, -259]]
 var mini_extra: Array = [[-7, 7, -50, 0, "#9a9a9a"], [40, 58, -20, 0, "#a88b6a"]]
@@ -167,6 +168,7 @@ func street_sign(text: String, x: float, z: float) -> void:
 	g.put("cyl8", Vector3(bp.x, 1.4, bp.y), C("#3a4248"), 0, Vector3(0.05, 2.8, 0.05))
 
 func lamp(x: float, z: float) -> void:
+	add_col(x - 0.18, x + 0.18, z - 0.18, z + 0.18, 3.0, false, 2)
 	g.put("cyl8", Vector3(x, 0.25, z), C("#262b2e"), 0, Vector3(0.22, 0.5, 0.22))
 	g.put("cyl8", Vector3(x, 2.4, z), C("#262b2e"), 0, Vector3(0.07, 4.4, 0.07))
 	g.box(0.36, 0.5, 0.36, x, 4.45, z, C("#fff1c8"), 0.0, "glow")
@@ -188,6 +190,9 @@ func tree(x: float, z: float, kind: String = "plane", s: float = 1.0) -> void:
 func bench(x: float, z: float, ry: float = 0.0) -> void:
 	var fw := Vector3(cos(ry), 0, -sin(ry))
 	var bk := Vector3(sin(ry), 0, cos(ry))
+	var ex := absf(fw.x) * 1.0 + absf(bk.x) * 0.35
+	var ez := absf(fw.z) * 1.0 + absf(bk.z) * 0.35
+	add_col(x - ex, x + ex, z - ez, z + ez, 1.2, false, 2)
 	g.box(2.0, 0.1, 0.55, x, 0.45, z, C("#7b5a3c"), ry)
 	var p := Vector3(x, 0, z) - bk * 0.26
 	g.box(2.0, 0.45, 0.08, p.x, 0.6, p.z, C("#7b5a3c"), ry)
@@ -208,6 +213,7 @@ func laundry(x: float, za: float, zb: float, y: float = 5.6) -> void:
 
 ## Kafe: masa, sandalyeler, şemsiye
 func cafe(x: float, z: float, col: Color) -> void:
+	add_col(x - 0.95, x + 0.95, z - 0.95, z + 0.95, 1.2, false, 2)
 	g.put("cyl", Vector3(x, 0.72, z), C("#f2efe9"), 0, Vector3(0.45, 0.05, 0.45))
 	g.put("cyl8", Vector3(x, 0.36, z), C("#3a3633"), 0, Vector3(0.05, 0.72, 0.05))
 	for k in 3:
@@ -227,6 +233,7 @@ func cafe_row(x0: float, z0: float, n: int, dx: float, dz: float) -> void:
 		cafe(x0 + dx * i, z0 + dz * i, col if rng.randf() < 0.7 else C("#f2efe9"))
 
 func flower_bed(x: float, z: float, w: float, d: float) -> void:
+	add_col(x - w / 2.0, x + w / 2.0, z - d / 2.0, z + d / 2.0, 1.0, false, 2)
 	g.box(w, 0.35, d, x, 0, z, C("#b9ab94"))
 	g.box(w - 0.3, 0.05, d - 0.3, x, 0.35, z, C("#5a3f2c"))
 	for i in int(w * d * 1.2):
@@ -246,6 +253,7 @@ func simit_cart(x: float, z: float) -> void:
 	for px in [-1.0, 1.0]:
 		g.box(0.06, 1.4, 0.06, x + px, 1.3, z - 0.5, C("#3d3d3d"))
 	add_col(x - 1.2, x + 1.2, z - 0.7, z + 0.7)
+	vendors.append([snappedf(x, 0.1), snappedf(z + 1.3, 0.1), PI])
 
 # ------------------------------------------------------------ evler
 func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, nz: float, st: Dictionary, d: float = 5.0) -> void:
@@ -918,7 +926,7 @@ func build_specials() -> void:
 	# ---- Haliç kıyısı, köprü, iskele
 	quay(-225, -7, -2, 0); quay(7, 40, -2, 0); quay(58, 237, -2, 0)
 	quay(237, 239, -2, 295)
-	add_col(-240, -7, -60, -0.5, 4, false); add_col(7, 40, -60, -0.5, 4, false); add_col(58, 260, -60, -0.5, 4, false)
+	add_col(-240, -7, -49.6, -0.5, 4, false); add_col(7, 40, -49.6, -0.5, 4, false); add_col(58, 260, -49.6, -0.5, 4, false)
 	add_col(236.5, 260, -2, 310, 4, false)
 	build_bridge(-50, 0)
 	build_pier(40, 58, -20, 0)
@@ -1083,6 +1091,7 @@ func street_cart(x: float, z: float, text: String, col: Color) -> void:
 	g.put("hip", Vector3(x, 2.5, z), col, 0, Vector3(2.0, 0.5, 1.3), "roof")
 	label(text, Vector3(x, 3.1, z), 34, C("#fffaf1"), col, 6, true)
 	add_col(x - 0.85, x + 0.85, z - 0.5, z + 0.5)
+	vendors.append([snappedf(x, 0.1), snappedf(z - 1.1, 0.1), 0.0])
 
 ## Taksim Meydanı: İstiklal'in kuzey ucu
 func build_taksim(ax: float, z_top: float) -> void:
@@ -1495,7 +1504,7 @@ func _init_city() -> void:
 		"fountains": data.fountains, "water": data.water, "walk_over": data.get("walk_over", []),
 		"fishing": data.get("fishing", []), "start": data.start,
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
-		"animals": animals, "npcs": npc_paths, "landmarks": data.landmarks, "movers": data.get("movers", [])}
+		"animals": animals, "npcs": npc_paths, "vendors": vendors, "landmarks": data.landmarks, "movers": data.get("movers", [])}
 	var f := FileAccess.open("res://map/%s.json" % city_id, FileAccess.WRITE)
 	f.store_string(JSON.stringify(out))
 	f.close()
@@ -1587,7 +1596,7 @@ func _init_istanbul() -> void:
 		"tram": [[125, 8], [125, 160], [-210, 160]],
 		"tram2": [[180, -268], [180, -425]],
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
-		"animals": animals, "npcs": npc_paths,
+		"animals": animals, "npcs": npc_paths, "vendors": vendors,
 		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Evin", -111, 240], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
 			["Mısır Çarşısı", -90, 25], ["Sirkeci", 80, 30], ["Galata Köprüsü", 0, -25], ["Karaköy", -40, -75], ["Galata Kulesi", 45, -202], ["İstiklal", 180, -350], ["Taksim", 180, -470]]}
 	var f := FileAccess.open("res://map/istanbul.json", FileAccess.WRITE)

@@ -8,6 +8,7 @@ var speed := 1.3
 var wait := 0.0
 var anim: AnimationPlayer
 var cur := ""
+var still := false   # satıcı: yerinde durur
 
 const LOOKS := ["character-male-a", "character-male-b", "character-male-c", "character-male-d", "character-male-e", "character-male-f",
 	"character-female-a", "character-female-b", "character-female-c", "character-female-d", "character-female-e", "character-female-f"]
@@ -44,6 +45,9 @@ func set_active(on: bool) -> void:
 	anim.active = on
 
 func tick(delta: float) -> void:
+	if still:
+		_play("idle")
+		return
 	if wait > 0.0:
 		wait -= delta
 		_play("idle")
