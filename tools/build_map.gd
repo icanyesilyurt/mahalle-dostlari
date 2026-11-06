@@ -23,6 +23,7 @@ var npc_paths: Array = []
 var chunk_cells := {}
 var pet_spots: Array = []
 var vendors: Array = []
+var ALLCOL: Array = []
 var city_id := "istanbul"
 var lands: Array = [[-225, 237, 0, 295], [-150, 230, -265, -50], [120, 240, -505, -259]]
 var mini_extra: Array = [[-7, 7, -50, 0, "#9a9a9a"], [40, 58, -20, 0, "#a88b6a"]]
@@ -117,6 +118,7 @@ func setup_materials() -> void:
 
 # ------------------------------------------------------------ yardımcılar
 func add_col(x0: float, x1: float, z0: float, z1: float, h: float = 14.0, track: bool = true, layer: int = 1) -> void:
+	ALLCOL.append([x0, x1, z0, z1])
 	if track:
 		COL.append([snappedf(x0, 0.01), snappedf(x1, 0.01), snappedf(z0, 0.01), snappedf(z1, 0.01)])
 	var sb := StaticBody3D.new()
@@ -1383,6 +1385,36 @@ func place_npc_paths() -> void:
 	npc_paths.append([165.0, -455.0, 205.0, -455.0]); npc_paths.append([200.0, -462.0, 165.0, -490.0]); npc_paths.append([190.0, -445.0, 190.0, -495.0])
 	npc_paths.append([-130.0, -54.0, -20.0, -54.0]); npc_paths.append([20.0, -53.5, 140.0, -53.5]); npc_paths.append([60.0, -55.0, 200.0, -55.0])
 
+## Yaya yollarını engellerden arındır: engel varsa en uzun açık parçayı tut
+func _blocked_at(x: float, z: float) -> bool:
+	for c in ALLCOL:
+		if x > c[0] - 0.4 and x < c[1] + 0.4 and z > c[2] - 0.4 and z < c[3] + 0.4:
+			return true
+	return false
+
+func clean_npc_paths() -> void:
+	var out := []
+	for p in npc_paths:
+		var a := Vector2(p[0], p[1]); var b := Vector2(p[2], p[3])
+		var L := a.distance_to(b)
+		var n := maxi(2, int(L / 0.8))
+		var best := [0, -1]
+		var start := -1
+		for i in n + 1:
+			var q := a.lerp(b, float(i) / n)
+			var free := not _blocked_at(q.x, q.y)
+			if free and start < 0:
+				start = i
+			if (not free or i == n) and start >= 0:
+				var e := i - 1 if not free else i
+				if e - start > best[1] - best[0]:
+					best = [start, e]
+				start = -1
+		if best[1] > best[0] and (best[1] - best[0]) * L / n > 6.0:
+			var pa := a.lerp(b, float(best[0]) / n); var pb := a.lerp(b, float(best[1]) / n)
+			out.append([snappedf(pa.x, 0.1), snappedf(pa.y, 0.1), snappedf(pb.x, 0.1), snappedf(pb.y, 0.1)])
+	npc_paths = out
+
 # ------------------------------------------------------------ mini harita
 func make_minimap(bounds: Rect2) -> void:
 	var sc := 1.0
@@ -1548,6 +1580,7 @@ func _init_city() -> void:
 	mini_extra = data.get("mini_extra", [])
 	place_animals_generic(data.get("fixed_animals", []), data.cat_names, data.dog_names, data.get("street_animals", 22))
 	place_npc_paths_generic(data.get("extra_npcs", []))
+	clean_npc_paths()
 	for n in mroot.get_children():
 		_own(n)
 	var ps := PackedScene.new()
@@ -1634,6 +1667,7 @@ func _init_istanbul() -> void:
 	build_decor()
 	place_animals()
 	place_npc_paths()
+	clean_npc_paths()
 
 	for n in mroot.get_children():
 		_own(n)

@@ -36,6 +36,7 @@ var tram_dir := 1.0
 var tram_path: Array = []
 var city := "istanbul"
 var movers: Array = []
+var dbg_walk := Vector3.ZERO
 const CITIES := {
 	"istanbul": {"name": "İstanbul", "hello": "İstanbul'a hoş geldin! Sultanahmet'te dostlar seni bekliyor"},
 	"paris": {"name": "Paris", "hello": "Bienvenue! Paris sokaklarında dostlar seni bekliyor"},
@@ -174,12 +175,10 @@ func _make_environment() -> void:
 	sun.light_energy = 0.62
 	sun.light_color = Color("#ffe6c4")
 	sun.shadow_enabled = true
-	# titremeyen gölge: iki dilim, yumuşak geçiş, uzakta yavaşça solar
-	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
-	sun.directional_shadow_max_distance = 80.0
-	sun.directional_shadow_split_1 = 0.25
-	sun.directional_shadow_blend_splits = true
-	sun.directional_shadow_fade_start = 0.7
+	# titremeyen gölge: tek parça gölge haritası (dilim sınırı yok), uzakta yavaşça solar
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	sun.directional_shadow_max_distance = 70.0
+	sun.directional_shadow_fade_start = 0.75
 	sun.shadow_bias = 0.12
 	sun.shadow_normal_bias = 2.2
 	add_child(sun)
@@ -315,6 +314,9 @@ func _debug_shots() -> void:
 		if a.begins_with("--far="):
 			var q := a.substr(6).split(",")
 			cam_pitch = float(q[0]); spring.spring_length = float(q[1])
+		if a.begins_with("--walk="):
+			var w := a.substr(7).split(",")
+			dbg_walk = Vector3(float(w[0]), 0, float(w[1]))
 		if a == "--home":
 			_enter_home()
 		if a.begins_with("--homecam="):
@@ -325,6 +327,7 @@ func _debug_shots() -> void:
 	if shot == "":
 		return
 	await get_tree().create_timer(3.0).timeout
+	print("DBG player pos ", player.position)
 	get_viewport().get_texture().get_image().save_png(shot)
 	get_tree().quit()
 
@@ -514,6 +517,9 @@ func _separate(delta: float) -> void:
 			continue
 		var d := pp - Vector2(n.position.x, n.position.z)
 		var L := d.length()
+		# yaya, önündeki oyuncuya çarpmadan durur
+		var ahead := Vector2(sin(n.rotation.y), cos(n.rotation.y))
+		n.blocked = L < 1.4 and L > 0.001 and ahead.dot(d / L) > 0.3
 		if L < 0.75 and L > 0.001:
 			push += d / L * (0.75 - L)
 	for a in animals:
@@ -1191,6 +1197,8 @@ func _process(delta: float) -> void:
 	if mv.length() > 1.0:
 		mv = mv.normalized()
 	player.move_input = mv
+	if dbg_walk != Vector3.ZERO:
+		player.move_input = dbg_walk
 
 	manual_cam_t -= delta
 	# kamera yumuşakça karakterin arkasına döner; geri geri yürürken dönmez

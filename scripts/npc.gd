@@ -9,6 +9,7 @@ var wait := 0.0
 var anim: AnimationPlayer
 var cur := ""
 var still := false   # satıcı: yerinde durur
+var blocked := false # oyuncu önünü kesince bekler
 
 const LOOKS := ["character-male-a", "character-male-b", "character-male-c", "character-male-d", "character-male-e", "character-male-f",
 	"character-female-a", "character-female-b", "character-female-c", "character-female-d", "character-female-e", "character-female-f"]
@@ -45,7 +46,7 @@ func set_active(on: bool) -> void:
 	anim.active = on
 
 func tick(delta: float) -> void:
-	if still:
+	if still or blocked:
 		_play("idle")
 		return
 	if wait > 0.0:
