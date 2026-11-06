@@ -617,6 +617,12 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 			_play("Jump_ToIdle", 0.1)
 	if happy <= 0.0:
 		jumped = false
+	# bankta/duvarda oturan dost: evindeyken yüksekte, kalkınca yere iner
+	if home.y > 0.05:
+		var at_home := Vector2(position.x - home.x, position.z - home.z).length() < 0.4 and mode == "" and not greet
+		position.y = lerpf(position.y, home.y if at_home else 0.0, minf(1.0, delta * 8.0))
+		if at_home:
+			target = Vector3(home.x, 0, home.z)
 	var bob := sin(t * 3.0 + ph) * 0.05
 	bowl.position.y = top_y + bob
 	drop.position.y = top_y + bob

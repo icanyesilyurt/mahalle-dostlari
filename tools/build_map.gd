@@ -662,12 +662,9 @@ func build_galata_kulesi(x: float, z: float) -> void:
 	big_label("Galata Kulesi", Vector3(x, 50, z), 140)
 
 func fisherman(x: float, z: float, side: float) -> void:
-	var jacket := pick(["#3b5b7a", "#6b4f3a", "#4f6b3b", "#7a3b3b", "#545454"])
-	var ry := side * PI / 2
-	g.box(0.34, 0.8, 0.22, x, 0, z, C("#2d3540"), ry)
-	g.box(0.48, 0.66, 0.3, x, 0.8, z, jacket, ry)
-	g.put("ball", Vector3(x, 1.65, z), C("#d6a982"), 0, Vector3(0.17, 0.19, 0.17))
-	g.box(0.36, 0.1, 0.36, x, 1.8, z, C("#2b2b2b"), ry)
+	# balıkçının kendisi oyunda karakter olarak yerleşir (satıcılar gibi)
+	vendors.append([snappedf(x, 0.1), snappedf(z, 0.1), side * PI / 2])
+	add_col(x - 0.35, x + 0.35, z - 0.35, z + 0.35, 2.0, false, 2)
 	var tip := Vector3(x + side * 3.6, 3.2, z)
 	var base := Vector3(x + side * 0.2, 1.0, z)
 	var ang := atan2(tip.y - base.y, absf(tip.x - base.x))
@@ -1354,6 +1351,9 @@ func place_animals() -> void:
 			else:
 				add_animal(false, DOG_NAMES[di % DOG_NAMES.size()], sp[0], sp[1], 0.0, "Kulübesinin önünde", DOG_STYLES[rng.randi() % DOG_STYLES.size()], rng.randf_range(0.85, 1.3)); di += 1
 			k += 1
+	# bankta güneşlenen kediler (listenin sonunda: eski dostlukların kimlikleri değişmesin)
+	for bk in [[49.78, 229.78], [31.0, 222.0], [42.0, 211.0]]:
+		add_animal(true, CAT_NAMES[ci % CAT_NAMES.size()], bk[0], bk[1], 0.5, "Bankta güneşleniyor", CAT_STYLES[rng.randi() % CAT_STYLES.size()], rng.randf_range(0.9, 1.05)); ci += 1
 
 func place_npc_paths() -> void:
 	# yayalar: yol orta çizgisine paralel, kaldırıma yakın gidip gelirler
