@@ -5,7 +5,7 @@ func _ready():
 	var sun := DirectionalLight3D.new(); sun.rotation = Vector3(-0.9, 0.5, 0); sun.light_energy = 0.8; add_child(sun)
 	var tests: Array = JSON.parse_string(FileAccess.get_file_as_string(OS.get_cmdline_user_args()[0]))
 	var out: String = OS.get_cmdline_user_args()[1]
-	var cam := Camera3D.new(); add_child(cam); cam.look_at_from_position(Vector3(0.95, 0.5, 0.75), Vector3(0, 0.28, 0))
+	var cam := Camera3D.new(); add_child(cam); cam.look_at_from_position(Vector3(1.8, 1.4, 1.8), Vector3(0, 0.1, 0))
 	var i := 0
 	for t in tests:
 		var n: Node3D = (load("res://assets/animals/%s.glb" % t.get("model", "shiba")) as PackedScene).instantiate()
@@ -16,7 +16,7 @@ func _ready():
 		for k in t.get("s", {}): var v = t.s[k]; sc[k] = Vector3(v[0], v[1], v[2]) if v is Array else v
 		for k in t.get("r", {}): var v = t.r[k]; rt[k] = Vector3(v[0], v[1], v[2])
 		var m = load("res://scripts/dog_shape.gd").new(); m.setup(sc, rt); sk.add_child(m)
-		await get_tree().create_timer(0.35).timeout
+		await get_tree().create_timer(2.5).timeout
 		get_viewport().get_texture().get_image().save_png("%s_%d.png" % [out, i])
 		n.queue_free(); i += 1
 	get_tree().quit()

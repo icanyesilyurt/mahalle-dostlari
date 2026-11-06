@@ -21,6 +21,7 @@ var squares: Array = []      # mini harita için meydanlar
 var animals: Array = []
 var npc_paths: Array = []
 var chunk_cells := {}
+var pet_spots: Array = []
 var vendors: Array = []
 var city_id := "istanbul"
 var lands: Array = [[-225, 237, 0, 295], [-150, 230, -265, -50], [120, 240, -505, -259]]
@@ -240,6 +241,39 @@ func flower_bed(x: float, z: float, w: float, d: float) -> void:
 		var fx := x + (rng.randf() - 0.5) * (w - 0.5); var fz := z + (rng.randf() - 0.5) * (d - 0.5)
 		g.put("ico", Vector3(fx, 0.5, fz), pick(["#e0483a", "#f2c230", "#d98aa0", "#f2efe9", "#9a5ac8", "#5f8f45", "#5f8f45"]), rng.randf(), Vector3(0.28, 0.25, 0.28))
 
+## Sokak hayvanı yuvası: köpek kulübesi ya da kedi evi. ry = kapının baktığı yön (0: +z)
+func pet_house(x: float, z: float, ry: float, dog: bool) -> void:
+	var fw := Vector3(sin(ry), 0, cos(ry))
+	if dog:
+		var wc := pick(["#a8714a", "#8a5a3c", "#c98a5a", "#7a8a5a", "#3b6aa8"])
+		g.box(1.15, 0.85, 1.25, x, 0.08, z, wc, ry)
+		g.put("hip", Vector3(x, 0.93, z), pick(["#b5532f", "#a24a34", "#2f5a3a"]), ry + PI / 2.0, Vector3(1.45, 0.55, 1.4), "roof")
+		var d := Vector3(x, 0, z) + fw * 0.63
+		g.box(0.5, 0.55, 0.04, d.x, 0.1, d.z, C("#2a2422"), ry)
+		g.put("cyl", Vector3(d.x, 0.65, d.z), C("#2a2422"), ry, Vector3(0.25, 0.04, 0.25), "plain", PI / 2.0, 0.0)
+		g.box(0.6, 0.12, 0.05, d.x, 0.95, d.z + 0.0, C("#f2efe9"), ry)
+		var b := Vector3(x, 0, z) + fw * 1.05 + Vector3(fw.z, 0, -fw.x) * 0.35
+		g.put("cyl", Vector3(b.x, 0.05, b.z), C("#f6c445"), 0, Vector3(0.17, 0.1, 0.17))
+		g.put("cyl", Vector3(b.x, 0.11, b.z), C("#a8622e"), 0, Vector3(0.13, 0.02, 0.13))
+	else:
+		var cc := pick(["#f2efe9", "#d98aa0", "#7cc6ea", "#f6c445", "#9fb3bf"])
+		g.box(0.8, 0.7, 0.8, x, 0.08, z, cc, ry)
+		g.box(0.92, 0.08, 0.92, x, 0.78, z, C("#8a5a3c"), ry)
+		g.put("cyl", Vector3(x, 0.92, z), C("#c8423a"), 0, Vector3(0.3, 0.12, 0.3))
+		var d2 := Vector3(x, 0, z) + fw * 0.41
+		g.put("cyl", Vector3(d2.x, 0.4, d2.z), C("#2a2422"), ry, Vector3(0.2, 0.03, 0.2), "plain", PI / 2.0, 0.0)
+		var b2 := Vector3(x, 0, z) + fw * 0.75
+		g.put("cyl", Vector3(b2.x, 0.05, b2.z), C("#7cc6ea"), 0, Vector3(0.14, 0.09, 0.14))
+	var r := 0.68 if dog else 0.48
+	add_col(x - r, x + r, z - r, z + r, 1.2, false, 2)
+	pet_spots.append([snappedf(x + fw.x * 1.2, 0.1), snappedf(z + fw.z * 1.2, 0.1)])
+
+## Parkta yan yana dizili barınaklar
+func shelter_row(x: float, z: float, n: int, dx: float, dz: float, ry: float) -> void:
+	for i in n:
+		pet_house(x + dx * i, z + dz * i, ry, i % 2 == 0)
+	label("Dostlar Barınağı", Vector3(x + dx * (n - 1) / 2.0, 2.2, z + dz * (n - 1) / 2.0), 34, C("#fffaf1"), C("#2f7d6d"), 8, true)
+
 func flower_pot(x: float, z: float) -> void:
 	g.put("cyl8", Vector3(x, 0.3, z), C("#b5643c"), 0, Vector3(0.3, 0.6, 0.3))
 	g.put("ico", Vector3(x, 0.8, z), C("#5f8f45"), rng.randf(), Vector3(0.4, 0.35, 0.4))
@@ -419,6 +453,15 @@ func block(x0: float, x1: float, z0: float, z1: float, st: Dictionary) -> void:
 	g.box(sw, 0.15, z1 - z0 - 2 * sw, x1 - sw / 2.0, 0, (z0 + z1) / 2.0, cc)
 	add_col(X0, X1, Z0, Z1)
 	var W := X1 - X0; var D := Z1 - Z0
+	if W > 8.0 and D > 8.0 and rng.randf() < 0.6:
+		var side := rng.randi() % 4
+		var dog := rng.randf() < 0.5
+		var off := 0.62 if dog else 0.45
+		match side:
+			0: pet_house(rng.randf_range(X0 + 2, X1 - 2), Z0 - off, PI, dog)
+			1: pet_house(rng.randf_range(X0 + 2, X1 - 2), Z1 + off, 0.0, dog)
+			2: pet_house(X0 - off, rng.randf_range(Z0 + 2, Z1 - 2), -PI / 2.0, dog)
+			_: pet_house(X1 + off, rng.randf_range(Z0 + 2, Z1 - 2), PI / 2.0, dog)
 	if W < 7.0 or D < 7.0:
 		var col := pick(st.pal)
 		g.wall_box(W, 7.0, D, (X0 + X1) / 2.0, 0, (Z0 + Z1) / 2.0, col, 0, st.wins[0], 2.6, 3.0)
@@ -853,6 +896,7 @@ func build_specials() -> void:
 	while lzp < gz1 - 4.0:
 		lamp(174.2, lzp); lamp(181.8, lzp + 9.0)
 		lzp += 18.0
+	shelter_row(gx0 + 14.0, gz0 + 5.0, 6, 2.1, 0.0, 0.0)
 	area("Gülhane Parkı", gx0, 235, gz0, gz1)
 	g.wall_box(3.0, 9.0, gz1 - gz0, 236.5, 0, (gz0 + gz1) / 2.0, C("#b9ab92"), 0, "door", 200, 9)
 	add_col(235, 238, gz0, gz1)
@@ -919,6 +963,7 @@ func build_specials() -> void:
 	add_col(fx - 3.2, fx + 3.2, fz - 3.2, fz + 3.2)
 	big_label("Hipodrom", Vector3(hx, 24, 240), 100)
 	player_home(hx0 + 14.5, 240.0)
+	shelter_row(hx0 + 9.0, 220.0, 5, 0.0, 2.0, PI / 2.0)
 	for zt in range(int(hz0) + 6, int(hz1) - 4, 14):
 		tree(hx0 + 5, zt, "plane", 1.0)
 		tree(hx1 - 5, zt + 7, "plane", 1.0)
@@ -1129,6 +1174,7 @@ func build_taksim(ax: float, z_top: float) -> void:
 	# Gezi Parkı (batı) ve çevre binalar
 	g.ground(122, 160, tz0 + 6, z_top - 18, 0.03, "grass", 5.0)
 	parks.append([122, 160, tz0 + 6, z_top - 18])
+	shelter_row(130.0, z_top - 21.0, 6, 2.2, 0.0, 0.0)
 	var tx := 126.0
 	while tx < 158.0:
 		var tzz := tz0 + 10.0
@@ -1296,6 +1342,16 @@ func place_animals() -> void:
 		else:
 			add_animal(false, DOG_NAMES[di % DOG_NAMES.size()], x, z, 0.0, r[0], DOG_STYLES[rng.randi() % DOG_STYLES.size()], rng.randf_range(0.85, 1.3)); di += 1
 		n += 1
+	# yuvalarının önünde yaşayan dostlar
+	var k := 0
+	for sp in pet_spots:
+		if rng.randf() < 0.3 and k < 14:
+			var cat2 := rng.randf() < 0.5
+			if cat2:
+				add_animal(true, CAT_NAMES[ci % CAT_NAMES.size()], sp[0], sp[1], 0.0, "Yuvasının önünde", CAT_STYLES[rng.randi() % CAT_STYLES.size()], rng.randf_range(0.85, 1.1)); ci += 1
+			else:
+				add_animal(false, DOG_NAMES[di % DOG_NAMES.size()], sp[0], sp[1], 0.0, "Kulübesinin önünde", DOG_STYLES[rng.randi() % DOG_STYLES.size()], rng.randf_range(0.85, 1.3)); di += 1
+			k += 1
 
 func place_npc_paths() -> void:
 	# yayalar: yol orta çizgisine paralel, kaldırıma yakın gidip gelirler
@@ -1504,7 +1560,7 @@ func _init_city() -> void:
 		"fountains": data.fountains, "water": data.water, "walk_over": data.get("walk_over", []),
 		"fishing": data.get("fishing", []), "start": data.start,
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
-		"animals": animals, "npcs": npc_paths, "vendors": vendors, "landmarks": data.landmarks, "movers": data.get("movers", [])}
+		"animals": animals, "npcs": npc_paths, "vendors": vendors, "pet_spots": pet_spots, "landmarks": data.landmarks, "movers": data.get("movers", [])}
 	var f := FileAccess.open("res://map/%s.json" % city_id, FileAccess.WRITE)
 	f.store_string(JSON.stringify(out))
 	f.close()
@@ -1596,7 +1652,7 @@ func _init_istanbul() -> void:
 		"tram": [[125, 8], [125, 160], [-210, 160]],
 		"tram2": [[180, -268], [180, -425]],
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
-		"animals": animals, "npcs": npc_paths, "vendors": vendors,
+		"animals": animals, "npcs": npc_paths, "vendors": vendors, "pet_spots": pet_spots,
 		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Evin", -111, 240], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
 			["Mısır Çarşısı", -90, 25], ["Sirkeci", 80, 30], ["Galata Köprüsü", 0, -25], ["Karaköy", -40, -75], ["Galata Kulesi", 45, -202], ["İstiklal", 180, -350], ["Taksim", 180, -470]]}
 	var f := FileAccess.open("res://map/istanbul.json", FileAccess.WRITE)

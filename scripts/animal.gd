@@ -549,8 +549,10 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 		wt -= delta
 		if wt <= 0.0:
 			wt = 3.0 + randf() * 5.0
-			# poz vermiş kedi yerinden kalkmasın
-			if not cat or pose == "stand" or randf() < 0.15:
+			# poz vermiş kedi ya da uyuyan köpek yerinden kalkmasın
+			if sleeping:
+				target = Vector3(position.x, 0, position.z)
+			elif not cat or pose == "stand" or randf() < 0.15:
 				target = home + Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.8, 0.8))
 		var to2 := Vector3(target.x - position.x, 0, target.z - position.z)
 		var d4 := to2.length()
@@ -574,6 +576,8 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 		if eat_t > 0.0 and not moving:
 			_play("Eating")
 		elif moving:
+			if sleeping:
+				_wake()
 			var fast := mode != "" or greet or Vector2(target.x - position.x, target.z - position.z).length() > 3.0
 			_play("Gallop" if fast else "Walk")
 		elif sleeping:
