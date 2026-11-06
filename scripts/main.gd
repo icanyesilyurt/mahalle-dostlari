@@ -333,6 +333,9 @@ func _make_player() -> void:
 	camera.current = true
 	pivot.global_position = player.global_position + Vector3(0, 1.5, 0)
 	cam_yaw = st[2]
+	# başlangıçta karakterin sırtı kameraya dönük olsun
+	player.facing = cam_yaw + PI
+	player.rotation.y = player.facing
 
 # --- hayvanlar ---
 func _make_animals() -> void:
@@ -431,7 +434,7 @@ func _tick_home(delta: float) -> void:
 func _city_items() -> Array:
 	var items := []
 	for k in CITIES:
-		if k == city:
+		if k == city or not FileAccess.file_exists("res://map/%s.json" % k):
 			continue
 		items.append({"id": "city:" + k, "title": "Pasaport: " + str(CITIES[k].name), "sub": "Bu şehre geç. Dostlukların kayıtlı kalır.", "price": "Git", "enabled": true})
 	return items
@@ -570,6 +573,43 @@ func _rec(a, key: String) -> Dictionary:
 	a.friend = int(r["f"])
 	return r
 
+# --- günlük görevler: basit, her gün yenilenen hedefler ---
+const MISSIONS := [
+	["fd", 5, "5 dosta mama ver", 50],
+	["wd", 3, "3 dosta su ver", 30],
+	["pd", 2, "2 dostla oyun oyna", 40],
+	["td", 1, "Bir dostuna ödül maması ver", 20],
+	["fish", 3, "Köprüden 3 kez balıkları besle", 20],
+]
+func _mis() -> Dictionary:
+	var m: Dictionary = D.get("mis", {})
+	if str(m.get("day", "")) != _today():
+		m = {"day": _today()}
+		D.mis = m
+	return m
+
+func _mission(key: String) -> void:
+	var m := _mis()
+	m[key] = int(m.get(key, 0)) + 1
+	for ms in MISSIONS:
+		if ms[0] == key and int(m[key]) == int(ms[1]):
+			D.pts = int(D.pts) + int(ms[3])
+			hud.toast("Günlük görev tamam: %s  +%d puan" % [ms[2], ms[3]], 3.0)
+	D.mis = m
+	_save()
+
+func _mission_entries() -> Array:
+	var m := _mis()
+	var out := []
+	for ms in MISSIONS:
+		if ms[0] == "fish" and not (MAP.has("bridge") or MAP.has("fishing")):
+			continue
+		var n := mini(int(m.get(ms[0], 0)), int(ms[1]))
+		var done := n >= int(ms[1])
+		out.append({"known": true, "color": Color("#7fbf6a") if done else Color("#f6c445"), "title": "Görev: " + str(ms[2]),
+			"sub": "%d / %d" % [n, ms[1]], "level": "Tamamlandı" if done else "+%d puan" % ms[3]})
+	return out
+
 func _rget(a, key: String) -> String:
 	var r: Dictionary = D.fr.get(a.id, {})
 	return str(r.get(key, ""))
@@ -596,7 +636,7 @@ func _sync_hud() -> void:
 		if known: met += 1
 		entries.append({"known": known, "color": a.color, "title": a.animal_name if known else "???",
 			"sub": (a.place_name + "  ·  %d kez" % a.friend) if known else "Henüz tanışmadın", "level": _level(a)})
-	hud.set_book(entries, met, animals.size())
+	hud.set_book(_mission_entries() + entries, met, animals.size())
 	hud.set_shop([
 		{"id": "treat", "title": "Ödül maması", "sub": "Oyundan sonra ver. Dostluğunu bir kat artırır.", "price": "%d puan" % TREAT_PRICE, "enabled": int(D.pts) >= TREAT_PRICE},
 		{"id": "treat5", "title": "5 ödül maması", "sub": "Toplu al, biraz daha ucuz.", "price": "%d puan" % (TREAT_PRICE * 4), "enabled": int(D.pts) >= TREAT_PRICE * 4},
@@ -733,6 +773,7 @@ func _on_feed() -> void:
 	D.pts = int(D.pts) + 10
 	near.hungry = false
 	_rec(near, "fd")
+	_mission("fd")
 	near.happy = 1.6
 	near.eat(3.0)
 	player.act("interact-right")
@@ -749,6 +790,7 @@ func _on_water() -> void:
 	D.water = int(D.water) - 1
 	near.thirsty = false
 	_rec(near, "wd")
+	_mission("wd")
 	near.happy = 1.6
 	near.eat(2.2)
 	player.act("interact-right")
@@ -761,6 +803,7 @@ func _give_treat() -> void:
 		return
 	D.treats = int(D.treats) - 1
 	_rec(near, "td")
+	_mission("td")
 	near.happy = 3.0
 	near.eat(2.0)
 	player.act("pick-up")
@@ -830,6 +873,7 @@ func _end_play(done: bool) -> void:
 		if _rget(a, "pd") != _today():
 			D.pts = int(D.pts) + PLAY_REWARD
 			_rec(a, "pd")
+			_mission("pd")
 			hud.toast("Harika oyundu! +%d puan. Ödül maması verebilirsin" % PLAY_REWARD, 3.0)
 		else:
 			hud.toast("%s çok eğlendi!" % a.animal_name, 2.4)
@@ -930,6 +974,7 @@ func _feed_fish() -> void:
 	gl.dive = 2.2
 	gl.dp = spot + Vector3(0, 0.4, 0)
 	D.pts = int(D.pts) + 2
+	_mission("fish")
 	_save(); _sync_hud()
 	hud.toast("Balıklar yemi kaptı! +2 puan", 1.6)
 
@@ -1062,9 +1107,13 @@ func _process(delta: float) -> void:
 	player.move_input = mv
 
 	manual_cam_t -= delta
-	if manual_cam_t <= 0.0 and player.moving and f_in > 0.4 and play.is_empty():
-		cam_yaw = lerp_angle(cam_yaw, player.facing + PI, minf(1.0, delta * 0.9))
-	var target := player.global_position + Vector3(0, 1.5, 0)
+	# kamera yumuşakça karakterin arkasına döner; geri geri yürürken dönmez
+	if manual_cam_t <= 0.0 and player.moving and f_in > -0.3 and play.is_empty():
+		var sideways := absf(r_in)
+		var rate := 0.7 + sideways * 1.6
+		cam_yaw = lerp_angle(cam_yaw, player.facing + PI, minf(1.0, delta * rate))
+	var look_ahead := Vector3(player.velocity.x, 0, player.velocity.z) * 0.22
+	var target := player.global_position + Vector3(0, 1.5, 0) + look_ahead
 	var pp := pivot.global_position
 	pp.x = lerpf(pp.x, target.x, minf(1.0, delta * 12.0))
 	pp.z = lerpf(pp.z, target.z, minf(1.0, delta * 12.0))
