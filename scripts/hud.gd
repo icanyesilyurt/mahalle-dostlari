@@ -362,10 +362,12 @@ func _process(delta: float) -> void:
 	place_panel.position = Vector2((vs.x - place_panel.size.x) / 2.0, 16)
 	toast_panel.position = Vector2((vs.x - toast_panel.size.x) / 2.0, vs.y * 0.22)
 	act_panel.position = Vector2((vs.x - act_panel.size.x) / 2.0, vs.y - act_panel.size.y - 16)
-	top_btns.position = Vector2(vs.x - top_btns.size.x - 18, 14)
+	var narrow := vs.x < pills.size.x + top_btns.size.x + 60.0
+	# dar (dikey) ekranda düğmeler göstergelerin altına iner
+	top_btns.position = Vector2(vs.x - top_btns.size.x - 18, 14 + (pills.size.y + 10.0 if narrow else 0.0))
 	hint.position = Vector2(20, vs.y - hint.size.y - 14)
 	hint.visible = not act_panel.visible
-	mm.position = Vector2(vs.x - 190 - 18, 70)
+	mm.position = Vector2(vs.x - 190 - 18, top_btns.position.y + top_btns.size.y + 8.0)
 	for p in [book_panel, shop_panel, map_panel]:
 		(p as Control).size = Vector2(minf(660.0, vs.x - 40.0), vs.y - 50.0)
 		(p as Control).position = (vs - (p as Control).size) / 2.0

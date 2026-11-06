@@ -331,6 +331,8 @@ func _make_player() -> void:
 	camera.far = 600
 	spring.add_child(camera)
 	camera.current = true
+	get_tree().root.size_changed.connect(_fit_screen)
+	_fit_screen()
 	pivot.global_position = player.global_position + Vector3(0, 1.5, 0)
 	cam_yaw = st[2]
 	# başlangıçta karakterin sırtı kameraya dönük olsun
@@ -448,6 +450,25 @@ func _decor_items() -> Array:
 			continue
 		items.append({"id": "decor:" + k, "title": "Evin için: " + str(info.name), "sub": "Hipodrom'daki evine yerleşir.", "price": "%d puan" % int(info.price), "enabled": int(D.pts) >= int(info.price)})
 	return items
+
+## Dikey/yatay ekrana uyum: arayüz ölçeği ve kamera görüş açısı
+func _fit_screen() -> void:
+	var ws := Vector2(DisplayServer.window_get_size())
+	if OS.has_feature("web"):
+		ws = Vector2(get_tree().root.size)
+	var portrait := ws.y > ws.x
+	get_tree().root.content_scale_size = Vector2i(720, 1280) if portrait else Vector2i(1280, 720)
+	if camera:
+		if portrait:
+			# dikeyde yatay görüşü sabit tut: karakter devleşmesin, etraf görünsün
+			camera.keep_aspect = Camera3D.KEEP_WIDTH
+			camera.fov = 78.0
+			cam_pitch = -0.17
+			camera.v_offset = 0.6
+		else:
+			camera.keep_aspect = Camera3D.KEEP_HEIGHT
+			camera.fov = 64.0
+			camera.v_offset = 0.0
 
 func _load_save_city() -> void:
 	# kayıt dosyasından hangi şehirde olduğumuzu oku (kayıt asıl _load_save ile yüklenir)
