@@ -254,7 +254,7 @@ static func louvre(B, x0: float, x1: float, z0: float, z1: float) -> void:
 	B.area("Louvre", x0, x1, z0, z1)
 	B.road("Cour Napoléon", x0 + d, x1 - d, z0 + d, z1)
 	# cam piramit ve havuzlar
-	var glass := B.C("#9cc7d8")
+	var glass: Color = B.C("#9cc7d8")
 	g.put("pyr", Vector3(px, 0.0, pz), glass, PI / 4.0, Vector3(22, 15, 22), "plain")
 	for e: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, 1)]:
 		g.put("pyr", Vector3(px + e.x * 22.0, 0.0, pz + e.y * 20.0), glass, PI / 4.0, Vector3(4, 3, 4), "plain")

@@ -79,6 +79,7 @@ static func build(B) -> Dictionary:
 	B.squares.append([-150, -60, 36, 100])
 	B.road("South Bank", -150, -60, 36, 100)
 	tate_globe(B)
+	B.grid([-150.0, -105.0, -60.0], [105.0, 150.0, 195.0, 240.0, 285.0, 308.0], stS, ["Belvedere Road", "Cornwall Road"], ["Stamford Street", "The Cut"], [], 5.0, "Waterloo")
 	# kırmızı telefon kulübeleri ve posta kutuları
 	var spots := [[-100.0, -225.0], [-20.0, -265.0], [60.0, -345.0], [140.0, -185.0], [-60.0, 105.0], [100.0, 150.0], [220.0, -225.0], [-100.0, -385.0], [20.0, -470.0], [180.0, 240.0]]
 	for i in spots.size():
@@ -104,7 +105,7 @@ static func build(B) -> Dictionary:
 		"water": [[-260, 280, -42, 25]],
 		"walk_over": walk, "fishing": walk,
 		"bounds": Rect2(-240, -515, 500, 825),
-		"start": [-150.0, -55.0, 0.3],
+		"start": [-120.0, -46.0, -1.2],
 		"fountains": [[-125, -318], [-95, -318], [-200, -295], [-150, -300], [80, -110], [-100, 70]],
 		"landmarks": [["Big Ben", -137, -65], ["Parlamento", -185, -75], ["Westminster Abbey", -205, -170], ["London Eye", -100, 40], ["Trafalgar", -110, -318],
 			["Buckingham", -200, -310], ["Hyde Park", -150, -450], ["Piccadilly", -50, -300], ["St Paul's", 80, -140], ["Tower of London", 207, -97],

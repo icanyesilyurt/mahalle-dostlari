@@ -38,11 +38,11 @@ var city := "istanbul"
 var movers: Array = []
 var dbg_walk := Vector3.ZERO
 const CITIES := {
-	"istanbul": {"name": "İstanbul", "hello": "İstanbul'a hoş geldin! Sultanahmet'te dostlar seni bekliyor"},
-	"paris": {"name": "Paris", "hello": "Bienvenue! Paris sokaklarında dostlar seni bekliyor"},
-	"roma": {"name": "Roma", "hello": "Benvenuto! Roma'nın meydanlarında dostlar seni bekliyor"},
-	"londra": {"name": "Londra", "hello": "Welcome! Londra sokaklarında dostlar seni bekliyor"},
-	"barselona": {"name": "Barselona", "hello": "Benvinguts! Barselona'da dostlar seni bekliyor"},
+	"istanbul": {"loc": "İstanbul'da", "name": "İstanbul", "hello": "İstanbul'a hoş geldin! Sultanahmet'te dostlar seni bekliyor"},
+	"paris": {"loc": "Paris'te", "name": "Paris", "hello": "Bienvenue! Paris sokaklarında dostlar seni bekliyor"},
+	"roma": {"loc": "Roma'da", "name": "Roma", "hello": "Benvenuto! Roma'nın meydanlarında dostlar seni bekliyor"},
+	"londra": {"loc": "Londra'da", "name": "Londra", "hello": "Welcome! Londra sokaklarında dostlar seni bekliyor"},
+	"barselona": {"loc": "Barselona'da", "name": "Barselona", "hello": "Benvinguts! Barselona'da dostlar seni bekliyor"},
 }
 var tram2: Node3D
 var tram2_s := 0.0
@@ -317,6 +317,8 @@ func _debug_shots() -> void:
 		if a.begins_with("--walk="):
 			var w := a.substr(7).split(",")
 			dbg_walk = Vector3(float(w[0]), 0, float(w[1]))
+		if a.begins_with("--goto="):
+			_go_city(a.substr(7))
 		if a == "--home":
 			_enter_home()
 		if a.begins_with("--homecam="):
@@ -459,13 +461,111 @@ func _tick_home(delta: float) -> void:
 			pet_node.goal = home_node.pet_bed
 			pet_node.mode = "go"
 
+# --- pasaport: şehirler sırayla açılır ---
+const CITY_ORDER := ["istanbul", "paris", "roma", "londra"]
+const UNLOCK_FRIENDS := 15
+const UNLOCK_PTS := 1500
+
+func _met_in(c: String) -> int:
+	var n := 0
+	for id in D.fr:
+		var r: Dictionary = D.fr[id]
+		if int(r.get("f", 0)) < 1:
+			continue
+		var sid := str(id)
+		var belongs := sid.begins_with(c + "_")
+		if c == "istanbul":
+			belongs = true
+			for o in CITY_ORDER:
+				if o != "istanbul" and sid.begins_with(o + "_"):
+					belongs = false
+		if belongs:
+			n += 1
+	return n
+
+func _unlocked(c: String) -> bool:
+	return c == "istanbul" or (D.get("unlocked", []) as Array).has(c)
+
 func _city_items() -> Array:
 	var items := []
-	for k in CITIES:
-		if k == city or not FileAccess.file_exists("res://map/%s.json" % k):
+	for i in CITY_ORDER.size():
+		var k: String = CITY_ORDER[i]
+		if k == city:
 			continue
-		items.append({"id": "city:" + k, "title": "Pasaport: " + str(CITIES[k].name), "sub": "Bu şehre geç. Dostlukların kayıtlı kalır.", "price": "Git", "enabled": true})
+		var nm := str(CITIES[k].name)
+		if _unlocked(k):
+			items.append({"id": "city:" + k, "title": "Pasaport: " + nm, "sub": "Bu şehre uç. %d dostunla tanıştın." % _met_in(k), "price": "Git", "enabled": true})
+			continue
+		var prev: String = CITY_ORDER[i - 1]
+		var met := _met_in(prev)
+		if not _unlocked(prev):
+			items.append({"id": "city:" + k, "title": "Pasaport: " + nm, "sub": "Önce %s pasaportunu aç." % CITIES[prev].name, "price": "Kilitli", "enabled": false})
+		elif met >= UNLOCK_FRIENDS:
+			items.append({"id": "unlock:" + k, "title": "Pasaport: " + nm, "sub": "%s %d dostla tanıştın. Pasaportun hazır!" % [CITIES[prev].loc, met], "price": "Ücretsiz aç", "enabled": true})
+		else:
+			items.append({"id": "unlock:" + k, "title": "Pasaport: " + nm, "sub": "%s %d/%d dostla tanış ya da puanla hemen aç." % [CITIES[prev].loc, met, UNLOCK_FRIENDS], "price": "%d puan" % UNLOCK_PTS, "enabled": int(D.pts) >= UNLOCK_PTS})
 	return items
+
+func _unlock_city(k: String) -> void:
+	var i := CITY_ORDER.find(k)
+	if i <= 0 or _unlocked(k):
+		return
+	var free := _met_in(CITY_ORDER[i - 1]) >= UNLOCK_FRIENDS
+	if not free:
+		if int(D.pts) < UNLOCK_PTS:
+			hud.toast("Yeterli puan yok")
+			return
+		D.pts = int(D.pts) - UNLOCK_PTS
+	var ul: Array = D.get("unlocked", [])
+	ul.append(k)
+	D.unlocked = ul
+	_save(); _sync_hud()
+	hud.toast("%s pasaportu açıldı! Mağazadan uçabilirsin" % CITIES[k].name, 3.0)
+
+## Şehir haritası paketi (tarayıcıda ilk gidişte indirilir)
+var pack_req: HTTPRequest
+var pack_city := ""
+
+func _city_ready(c: String) -> bool:
+	if FileAccess.file_exists("res://map/%s.json" % c):
+		return true
+	var up := "user://packs/%s.pck" % c
+	if FileAccess.file_exists(up):
+		ProjectSettings.load_resource_pack(up)
+	return FileAccess.file_exists("res://map/%s.json" % c)
+
+func _download_city(c: String) -> void:
+	if pack_req:
+		return
+	DirAccess.make_dir_recursive_absolute("user://packs")
+	pack_req = HTTPRequest.new()
+	add_child(pack_req)
+	pack_city = c
+	pack_req.download_file = "user://packs/%s.pck" % c
+	pack_req.download_chunk_size = 1048576
+	pack_req.use_threads = not OS.has_feature("web")
+	pack_req.request_completed.connect(_on_pack_done)
+	var base := ""
+	if OS.has_feature("web"):
+		base = str(JavaScriptBridge.eval("window.location.href.split('?')[0].replace(/[^/]*$/, '')"))
+	else:
+		base = "https://icanyesilyurt.github.io/mahalle-dostlari/"
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--packbase="):
+				base = a.substr(11)
+	var ver := FileAccess.get_file_as_string("res://version.txt").strip_edges()
+	pack_req.request(base + "%s.pck?v=%s" % [c, ver])
+	hud.toast("%s haritası indiriliyor…" % CITIES[c].name, 60.0)
+
+func _on_pack_done(result: int, code: int, _h, _b) -> void:
+	var c := pack_city
+	pack_req.queue_free()
+	pack_req = null
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200 or not _city_ready(c):
+		DirAccess.remove_absolute("user://packs/%s.pck" % c)
+		hud.toast("Harita indirilemedi. İnternetini kontrol edip tekrar dene", 3.0)
+		return
+	_go_city(c)
 
 func _decor_items() -> Array:
 	var owned: Array = D.get("decor", [])
@@ -551,9 +651,14 @@ func _load_save_city() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--city="):
 			city = a.substr(7)
+	if not _city_ready(city):
+		city = "istanbul"
 
 func _go_city(id: String) -> void:
-	if id == city or not CITIES.has(id):
+	if id == city or not CITIES.has(id) or not _unlocked(id):
+		return
+	if not _city_ready(id):
+		_download_city(id)
 		return
 	D.city = id
 	_save()
@@ -643,6 +748,7 @@ func _load_save() -> void:
 		if not D.has(k): D[k] = 0 if k == "treats" else 10
 	if D.day != _today():
 		_new_day_values()
+	D.city = city
 	_save()
 
 func _new_day_values() -> void:
@@ -808,6 +914,9 @@ func _on_buy(id: String) -> void:
 		D.ch = LOOKS[i]
 		_apply_player_colors()
 		_save()
+		return
+	if id.begins_with("unlock:"):
+		_unlock_city(id.substr(7))
 		return
 	if id.begins_with("city:"):
 		_go_city(id.substr(5))

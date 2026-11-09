@@ -14,7 +14,7 @@ static func pine(B, x: float, z: float, s: float = 1.0) -> void:
 	var g = B.g
 	g.put("cyl8", Vector3(x, 4.0 * s, z), B.C("#7a5a40"), 0, Vector3(0.35 * s, 8.0 * s, 0.35 * s))
 	for k in 4:
-		var a := k * TAU / 4.0 + B.rng.randf()
+		var a: float = k * TAU / 4.0 + B.rng.randf()
 		g.put("ico", Vector3(x + cos(a) * 2.2 * s, 8.6 * s, z + sin(a) * 2.2 * s), B.C("#3f6a35").lerp(B.C("#567d3f"), B.rng.randf()), B.rng.randf(), Vector3(3.2, 1.3, 3.2) * s)
 	g.put("ico", Vector3(x, 9.1 * s, z), B.C("#4a7438"), 0, Vector3(3.8, 1.4, 3.8) * s)
 	B.add_col(x - 0.4, x + 0.4, z - 0.4, z + 0.4, 6, false, 2)
@@ -95,6 +95,11 @@ static func build(B) -> Dictionary:
 	for k in 6:
 		pine(B, 240.0, 40.0 + k * 40.0, 1.1)
 	B.flush_chunk("Palatino")
+	# boş kalan güney ve batı mahalleleri
+	B.grid([40.0, 85.0, 130.0], [160.0, 205.0, 250.0, 307.0], st, ["Via Labicana", "Via Celimontana"], ["Via di San Gregorio", "Via Claudia"], [], 5.0, "Celio")
+	B.grid([215.0, 258.0], [20.0, 65.0, 110.0, 155.0], st, ["Via Merulana"], ["Via Emanuele Filiberto", "Via Tasso"], [], 5.0, "Esquilino")
+	B.grid([215.0, 258.0], [250.0, 307.0], st, ["Via Ostilia"], ["Via dei Santi Quattro"], [], 5.0, "Laterano")
+	B.grid([-237.0, -195.0, -153.0], [-390.0, -345.0, -310.0, -275.0], st, ["Borgo Pio", "Borgo Vittorio"], ["Via dei Corridori", "Via Crescenzio"], [[-225, -185, -320, -280]], 5.0, "Borgo")
 	# vespalar
 	for k in 14:
 		var vx: float = -95.0 + (k % 7) * 45.0 + 2.6

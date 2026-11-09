@@ -488,6 +488,7 @@ func block(x0: float, x1: float, z0: float, z1: float, st: Dictionary) -> void:
 	house_row(X0, Z1 - 5.0, 0, -1, D - 10.0, -1, 0, st)
 
 func flush_chunk(name: String, vis: float = 260.0) -> void:
+	print("chunk ", name, " ", Time.get_ticks_msec())
 	var mi: MeshInstance3D = g.flush(mroot.get_node("Sehir"), mroot, name)
 	if mi:
 		mi.visibility_range_end = vis
@@ -1575,6 +1576,10 @@ func _init_city() -> void:
 	for n in ["Zemin", "Sehir", "SimgeYapilar", "Dekor", "Carpisma", "Tabelalar", "Hareketli"]:
 		var c := Node3D.new(); c.name = n; mroot.add_child(c)
 	var CityB = load("res://tools/cities/%s.gd" % city_id)
+	if CityB == null or not CityB.can_instantiate():
+		push_error("şehir betiği yüklenemedi")
+		quit(1)
+		return
 	var data: Dictionary = CityB.build(self)
 	lands = data.lands
 	mini_extra = data.get("mini_extra", [])
