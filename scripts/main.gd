@@ -317,6 +317,9 @@ func _debug_shots() -> void:
 		if a.begins_with("--walk="):
 			var w := a.substr(7).split(",")
 			dbg_walk = Vector3(float(w[0]), 0, float(w[1]))
+		if a == "--nohud":
+			hud.visible = false
+			player.visible = false
 		if a.begins_with("--goto="):
 			_go_city(a.substr(7))
 		if a == "--home":
@@ -415,6 +418,7 @@ func _pet_items() -> Array:
 
 # --- ev ---
 func _enter_home() -> void:
+	_stop_romp()
 	in_home = true
 	player.position = home_node.door_pos
 	player.facing = -PI / 2.0
@@ -437,6 +441,65 @@ func _exit_home() -> void:
 	if pet_node:
 		pet_node.position = player.position + Vector3(1.0, 0, 1.0)
 		pet_node.mode = "follow"
+
+# --- köpekler arada birbiriyle kovalamaca oynar ---
+var romp := {}
+var romp_cd := 8.0
+func _tick_romp(delta: float) -> void:
+	if not romp.is_empty():
+		var a = romp.a; var b = romp.b
+		romp.t -= delta
+		if not (a.mode in ["chase", "go"]) or not (b.mode in ["chase", "go"]) or romp.t <= 0.0:
+			_stop_romp()
+			romp_cd = randf_range(10.0, 20.0)
+			return
+		var gap: float = Vector2(a.position.x - b.position.x, a.position.z - b.position.z).length()
+		if romp.phase == "meet":
+			# önce birbirlerine koşarlar
+			a.goal = a.position; b.goal = a.position
+			if gap < 1.6:
+				romp.phase = "chase"
+				romp.t = randf_range(6.0, 9.0)
+				a.mode = "chase"; b.mode = "go"; b.run_spd = 4.6
+				b.goal = _romp_goal(b)
+				a.happy = 1.0; b.happy = 1.0
+			return
+		a.goal = b.position
+		if Vector2(b.position.x - b.goal.x, b.position.z - b.goal.z).length() < 0.6:
+			b.goal = _romp_goal(b)
+		romp.sw = float(romp.get("sw", 0.0)) - delta
+		if gap < 1.0 and romp.sw <= 0.0:
+			romp.sw = 2.0
+			# yakalayınca roller değişir
+			romp.a = b; romp.b = a
+			a.mode = "go"; a.run_spd = 4.6; a.goal = _romp_goal(a)
+			b.mode = "chase"; b.run_spd = 0.0
+		return
+	romp_cd -= delta
+	if romp_cd > 0.0:
+		return
+	romp_cd = 3.0
+	var pp := player.position
+	var dogs := []
+	for an in animals:
+		if not an.cat and an.visible and an.mode == "" and not an.greet and not an.sleeping and an.position.distance_to(pp) > 4.0 and an.position.distance_to(pp) < 45.0:
+			dogs.append(an)
+	for i in dogs.size():
+		for j in range(i + 1, dogs.size()):
+			if dogs[i].position.distance_to(dogs[j].position) < 50.0 and _line_clear(dogs[i].position, dogs[j].position):
+				var a2 = dogs[i]; var b2 = dogs[j]
+				a2.mode = "go"; b2.mode = "go"
+				a2.run_spd = 5.0; b2.run_spd = 5.0
+				romp = {"a": a2, "b": b2, "t": 20.0, "phase": "meet"}
+				return
+
+func _play_pet() -> void:
+	if pet_node == null or not play.is_empty():
+		return
+	idle_home_t = 0.0
+	pet_node.friend = maxi(1, pet_node.friend)
+	near = pet_node
+	_start_play()
 
 func _love_pet() -> void:
 	if pet_node == null:
@@ -882,6 +945,7 @@ func _update_actions() -> void:
 	if in_home:
 		var acts := [{"id": "home_out", "label": "Dışarı çık", "enabled": true, "color": Color("#e9e4d6")}]
 		if pet_node:
+			acts.push_front({"id": "pet_play", "label": "Lazerle oyna" if pet_node.cat else "Top oyna", "enabled": true, "color": Color("#c8e6b0")})
 			acts.push_front({"id": "pet_love", "label": "%s'i sev" % pet_node.animal_name, "enabled": true, "color": Color("#f2b8c6")})
 		hud.show_actions("Evin", "Dostunla baş başa. Bir süre durursan minderine gidip uyur." if pet_node else "Mağazadan bir dost sahiplenirsen burada seninle yaşar.", acts)
 		return
@@ -906,6 +970,7 @@ func _on_action(id: String) -> void:
 		"home_in": _enter_home()
 		"home_out": _exit_home()
 		"pet_love": _love_pet()
+		"pet_play": _play_pet()
 
 func _on_buy(id: String) -> void:
 	if id == "look":
@@ -1014,7 +1079,37 @@ func _give_treat() -> void:
 	_save(); _sync_hud()
 
 # --- oyun: top ve lazer ---
+## Kaçan köpek için engelsiz bir hedef: evinin çevresinde, düz çizgiyle ulaşılabilir
+func _romp_goal(d) -> Vector3:
+	for i in 12:
+		var q: Vector3 = d.home + Vector3(randf_range(-5, 5), 0, randf_range(-5, 5))
+		q.y = 0.0
+		if q.distance_to(d.position) > 2.0 and _line_clear(d.position, q):
+			return q
+	return Vector3(d.home.x, 0, d.home.z)
+
+func _line_clear(p: Vector3, q: Vector3) -> bool:
+	var n := int(p.distance_to(q) / 0.8) + 1
+	for i in n + 1:
+		var r := p.lerp(q, float(i) / n)
+		for c in COL:
+			if r.x > c[0] - 0.3 and r.x < c[1] + 0.3 and r.z > c[2] - 0.3 and r.z < c[3] + 0.3:
+				return false
+	return true
+
+func _stop_romp() -> void:
+	if romp.is_empty():
+		return
+	for d in [romp.a, romp.b]:
+		d.run_spd = 0.0
+		if d.mode in ["chase", "go"]:
+			d.mode = ""
+			d.target = d.home
+			d.happy = 1.5
+	romp = {}
+
 func _start_play() -> void:
+	_stop_romp()
 	if near == null or near.friend <= 0:
 		return
 	var a = near
@@ -1030,6 +1125,9 @@ func _start_play() -> void:
 		hud.toast("Kameranın baktığı yöne topu at!", 2.2)
 
 func _clear_target(p: Vector3) -> bool:
+	if in_home:
+		var hp: Vector3 = home_node.position
+		return absf(p.x - hp.x) < 5.0 and absf(p.z - hp.z) < 3.5
 	for c in COL:
 		if p.x > c[0] - 0.6 and p.x < c[1] + 0.6 and p.z > c[2] - 0.6 and p.z < c[3] + 0.6:
 			return false
@@ -1064,7 +1162,7 @@ func _end_play(done: bool) -> void:
 	if play.is_empty():
 		return
 	var a = play.a
-	a.mode = ""
+	a.mode = "follow" if a == pet_node else ""
 	a.target = a.home
 	ball.visible = false
 	dot.visible = false
@@ -1329,6 +1427,8 @@ func _process(delta: float) -> void:
 	var ppos := Vector2(player.position.x, player.position.z)
 	_tick_pigeons(delta)
 	_tick_home(delta)
+	if not in_home and play.is_empty():
+		_tick_romp(delta)
 	if pet_node:
 		pet_node.tick(delta, player.global_position, t)
 	for a in animals:

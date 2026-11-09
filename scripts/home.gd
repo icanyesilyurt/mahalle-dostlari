@@ -18,6 +18,13 @@ func _mat(c: Color, tex: Texture2D = null, uv := Vector3.ONE) -> StandardMateria
 	m.roughness = 0.9
 	return m
 
+## Pencereden görünen İstanbul manzarası
+func _view_mat(i: int) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load("res://assets/home_view_%d.png" % i)
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return m
+
 func _box(size: Vector3, pos: Vector3, mat: Material, collide := true) -> void:
 	var mi := MeshInstance3D.new()
 	var bm := BoxMesh.new(); bm.size = size
@@ -82,12 +89,17 @@ func build(origin: Vector3) -> void:
 	var sky := _mat(Color("#bfe3f5"))
 	sky.emission_enabled = true; sky.emission = Color("#bfe3f5"); sky.emission_energy_multiplier = 0.6
 	var frame := _mat(Color("#6e4a3a"))
+	var wi := 0
 	for x in [-3.5, 0.5, 4.0]:
-		_box(Vector3(1.4, 1.5, 0.05), Vector3(x, 1.9, -D / 2 + 0.01), sky, false)
+		_box(Vector3(1.4, 1.5, 0.05), Vector3(x, 1.9, -D / 2 + 0.01), _view_mat(wi), false)
 		_box(Vector3(1.6, 0.1, 0.12), Vector3(x, 1.1, -D / 2 + 0.05), frame, false)
 		_box(Vector3(0.06, 1.5, 0.08), Vector3(x, 1.9, -D / 2 + 0.04), frame, false)
+		_box(Vector3(1.5, 0.06, 0.08), Vector3(x, 1.9, -D / 2 + 0.04), frame, false)
+		wi += 1
 	for z in [-2.0, 2.0]:
-		_box(Vector3(0.05, 1.5, 1.4), Vector3(-W / 2 + 0.01, 1.9, z), sky, false)
+		_box(Vector3(0.05, 1.5, 1.4), Vector3(-W / 2 + 0.01, 1.9, z), _view_mat(wi % 3), false)
+		_box(Vector3(0.08, 1.5, 0.06), Vector3(-W / 2 + 0.04, 1.9, z), frame, false)
+		wi += 1
 	# oturma köşesi
 	_prop("rug_rectangle_stripes_A", Vector3(-3.2, 0.01, -2.4), 0.0, 1.0, false)
 	_prop("couch_pillows", Vector3(-3.2, 0, -3.9), 0.0)

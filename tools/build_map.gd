@@ -549,6 +549,39 @@ func mosque(cx: float, cz: float, size: float, h: float, r: float, col: Color, s
 		dome(px, h + 4.0, pz, 1.7, 0.8, 0.0)
 	add_col(cx - hs, cx + hs, cz - hs, cz + hs)
 
+## Şadırvan: sekizgen abdest çeşmesi, sütunlar ve kubbe
+func sadirvan(x: float, z: float, s: float = 1.0) -> void:
+	g.put("cyl8", Vector3(x, 0.5 * s, z), C("#e6e0d4"), PI / 8, Vector3(2.4 * s, 1.0 * s, 2.4 * s))
+	for k in 8:
+		var a := k * TAU / 8 + PI / 8
+		g.put("cyl", Vector3(x + cos(a) * 2.3 * s, 2.2 * s, z + sin(a) * 2.3 * s), C("#e6e0d4"), 0, Vector3(0.14 * s, 2.4 * s, 0.14 * s))
+		g.put("cyl8", Vector3(x + cos(a) * 1.15 * s, 0.85 * s, z + sin(a) * 1.15 * s), C("#d4a93c"), 0, Vector3(0.05, 0.3, 0.05), "gold")
+	g.put("cyl8", Vector3(x, 3.5 * s, z), C("#d9d2c4"), PI / 8, Vector3(3.0 * s, 0.4 * s, 3.0 * s))
+	dome(x, 3.7 * s, z, 2.7 * s, 0.75, 0.0)
+	add_col(x - 2.3 * s, x + 2.3 * s, z - 2.3 * s, z + 2.3 * s)
+
+## Kapalıçarşı kapısı (Nuruosmaniye): cadde cephesinde taş kapı, kemer, tuğra
+func kapalicarsi_gate(x: float, z: float, ry: float) -> void:
+	var S := stone(C("#e2d6bc"))
+	var fw := Vector3(sin(ry), 0, cos(ry))
+	var sd := Vector3(fw.z, 0, -fw.x)
+	for e: float in [-1.0, 1.0]:
+		var p := Vector3(x, 0, z) + sd * e * 3.6
+		g.box(1.5, 9.0, 1.8, p.x, 0, p.z, S, ry)
+		g.box(1.8, 0.4, 2.0, p.x, 9.0, p.z, C("#cfc3a8"), ry)
+		g.put("cone8", Vector3(p.x, 9.4, p.z), C("#8e989c"), 0, Vector3(0.9, 1.8, 0.9))
+	g.box(5.2, 2.6, 2.0, x, 6.4, z, S, ry)
+	g.put("cyl", Vector3(x, 6.4, z), S, ry, Vector3(2.6, 2.0, 2.6), "plain", PI / 2.0, 0.0)
+	var t := Vector3(x, 0, z) + fw * 1.05
+	g.box(1.6, 1.2, 0.1, t.x, 7.4, t.z, C("#2f6b4a"), ry)
+	g.put("cyl", Vector3(t.x, 7.95, t.z), C("#d4a93c"), ry, Vector3(0.35, 0.08, 0.35), "gold", PI / 2.0, 0.0)
+	var d := Vector3(x, 0, z) - fw * 0.6
+	g.box(4.8, 6.2, 0.2, d.x, 0, d.z, C("#3a2a22"), ry)
+	label("Kapalıçarşı", Vector3(x, 10.5, z) + fw * 1.2, 70, C("#fff1c8"), C("#2f6b4a"), 12, true)
+	for e2: float in [-1.0, 1.0]:
+		var p2 := Vector3(x, 0, z) + sd * e2 * 3.6
+		add_col(p2.x - 0.75, p2.x + 0.75, p2.z - 0.9, p2.z + 0.9)
+
 func build_ayasofya(cx: float, cz: float) -> void:
 	var B := C("#d99a74")
 	g.wall_box(36, 11, 30, cx, 0, cz, B, 0, "win_c", 3.6, 5.5, true)
@@ -908,6 +941,8 @@ func build_specials() -> void:
 	squares.append([sx0, sx1, sz0, sz1])
 	area("Sultanahmet Meydanı", sx0, sx1, sz0, sz1)
 	build_ayasofya(88.0, 186.0)
+	sadirvan(60.0, 172.0, 0.9)
+	kapalicarsi_gate(-172.0, 205.2, 0.0)
 	build_sultanahmet_camii(-2.0, 255.0)
 	g.flush(L, mroot, "Camiler")
 	# park: çim adacıkları, fıskiye, yollar
@@ -1692,7 +1727,7 @@ func _init_istanbul() -> void:
 		"tram2": [[180, -268], [180, -425]],
 		"bounds": [bounds.position.x, bounds.position.y, bounds.size.x, bounds.size.y],
 		"animals": animals, "npcs": npc_paths, "vendors": vendors, "pet_spots": pet_spots,
-		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Evin", -111, 240], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
+		"landmarks": [["Ayasofya", 88, 186], ["Sultan Ahmet Camii", -2, 255], ["Hipodrom", -88, 222], ["Evin", -111, 240], ["Kapalıçarşı", -172, 205], ["Gülhane", 185, 130], ["Yeni Cami", -10, 34],
 			["Mısır Çarşısı", -90, 25], ["Sirkeci", 80, 30], ["Galata Köprüsü", 0, -25], ["Karaköy", -40, -75], ["Galata Kulesi", 45, -202], ["İstiklal", 180, -350], ["Taksim", 180, -470]]}
 	var f := FileAccess.open("res://map/istanbul.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify(data))

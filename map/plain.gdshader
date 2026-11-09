@@ -4,5 +4,5 @@ vec3 to_lin(vec3 c) { return mix(pow((c + vec3(0.055)) / 1.055, vec3(2.4)), c / 
 void fragment() {
 	ALBEDO = to_lin(COLOR.rgb);
 	ROUGHNESS = 0.85;
-	METALLIC = COLOR.a < 0.5 ? 0.6 : 0.0;
+	METALLIC = 0.0;
 }

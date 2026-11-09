@@ -109,6 +109,7 @@ var blink_t := 2.0
 var look_y := 0.0
 var idle_t := 4.0
 var jumped := false
+var run_spd := 0.0
 
 func build() -> void:
 	ph = randf() * 6.0
@@ -514,12 +515,13 @@ func tick(delta: float, player_pos: Vector3, t: float) -> void:
 	if mode != "":
 		greet = false
 		if mode == "go":
-			moving = _step_to(goal, 7.0 if not cat else 5.5, 0.35, delta) > 0.4
+			moving = _step_to(goal, run_spd if run_spd > 0.0 else (7.0 if not cat else 5.5), 0.35, delta) > 0.4
 			if not moving and id == "pet" and cat:
 				pose = "loaf"; pose_t = 30.0
 		elif mode == "chase":
-			var d := _step_to(goal, 6.0, 0.25, delta)
-			moving = d > 0.3
+			var stop := 0.25 if cat else 0.85
+			var d := _step_to(goal, 6.0, stop, delta)
+			moving = d > stop + 0.05
 		elif mode == "follow":
 			# sahiplenilen dost: oyuncunun peşinden gelir
 			var df := Vector2(flat.x - position.x, flat.z - position.z).length()
