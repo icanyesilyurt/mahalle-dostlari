@@ -57,6 +57,8 @@ var last_place := ""
 var cam_yaw := 0.0
 var cam_pitch := -0.18
 var manual_cam_t := 0.0
+var yaw_off := 0.0     # elle bakış (bırakınca sıfıra döner)
+var pitch_off := 0.0
 var joy_id := -1
 var joy_o := Vector2.ZERO
 var joy_v := Vector2.ZERO
@@ -142,7 +144,7 @@ func _ready() -> void:
 	_fit_screen.call_deferred()
 	var mb: Array = MAP.bounds
 	hud.set_map(load("res://map/%s_mini.png" % city), Rect2(mb[0], mb[1], mb[2], mb[3]), MAP.landmarks)
-	hud.set_hint("Sol taraf: yürü  ·  Sağ taraf: kamerayı çevir" if is_touch else "WASD: yürü  ·  Fareyle sürükle: kamera  ·  Tekerlek: yakınlaştır")
+	hud.set_hint("Sol alttaki çubukla yürü  ·  Sağ tarafı sürükleyip etrafa bak" if is_touch else "WASD: yürü  ·  Fareyle sürükle: kamera  ·  Tekerlek: yakınlaştır")
 	_sync_hud()
 	hud.toast(CITIES[city].hello, 3.5)
 	_debug_shots()
@@ -182,6 +184,29 @@ func _make_environment() -> void:
 	sun.shadow_bias = 0.12
 	sun.shadow_normal_bias = 2.2
 	add_child(sun)
+	var lp := 1
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--light="):
+			lp = int(a.substr(8))
+	if lp >= 1:
+		# sıcak güneş + soğuk gökyüzü dolgu ışığı: gölgedeki yüzler de yönüne göre farklı tonlanır
+		sun.light_energy = 0.68
+		sun.light_color = Color("#ffdcae")
+		sun.rotation_degrees = Vector3(-36, -50, 0)
+		env.ambient_light_color = Color("#9fb0c8")
+		env.ambient_light_energy = 0.26
+		var fill := DirectionalLight3D.new()
+		fill.rotation_degrees = Vector3(-55, 130, 0)
+		fill.light_energy = 0.22 if lp == 1 else 0.3
+		fill.light_color = Color("#a9c4e8")
+		fill.shadow_enabled = false
+		fill.light_specular = 0.0
+		add_child(fill)
+		env.adjustment_enabled = true
+		env.adjustment_contrast = 1.1
+		env.adjustment_saturation = 1.04 if lp == 1 else 0.96
+		env.fog_light_color = Color("#e6d4c0")
+		env.fog_density = 0.0024
 	# su
 	var water := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
@@ -310,6 +335,8 @@ func _debug_shots() -> void:
 			var p := a.substr(5).split(",")
 			player.position = Vector3(float(p[0]), 0.1, float(p[1]))
 			cam_yaw = float(p[2])
+			player.facing = cam_yaw + PI
+			player.rotation.y = player.facing
 			pivot.global_position = player.position + Vector3(0, 1.5, 0)
 		if a.begins_with("--far="):
 			var q := a.substr(6).split(",")
@@ -1142,7 +1169,8 @@ func _clear_target(p: Vector3) -> bool:
 func _throw_ball() -> void:
 	if play.is_empty() or play.state != "ready":
 		return
-	var fwd := -Vector3(sin(cam_yaw), 0, cos(cam_yaw))
+	var vy := cam_yaw + yaw_off
+	var fwd := -Vector3(sin(vy), 0, cos(vy))
 	var start := player.global_position + Vector3(0, 1.3, 0)
 	var dist := 10.0
 	var tgt := Vector3.ZERO
@@ -1193,7 +1221,7 @@ func _update_play(delta: float) -> void:
 		var c := vs / 2.0 + Vector2(0, vs.y * 0.08)
 		var o := camera.project_ray_origin(c)
 		var d := camera.project_ray_normal(c)
-		var p := player.global_position + -Vector3(sin(cam_yaw), 0, cos(cam_yaw)) * 4.0
+		var p := player.global_position + -Vector3(sin(cam_yaw + yaw_off), 0, cos(cam_yaw + yaw_off)) * 4.0
 		if d.y < -0.01:
 			p = o + d * (-(o.y - 0.02) / d.y)
 		var off := p - player.global_position
@@ -1339,9 +1367,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			joy_raw = (d.position - joy_o).limit_length(JOY_R) / JOY_R
 		elif d.index == look_id:
 			var k := 1100.0 / maxf(vs.x, 600.0)
-			cam_yaw -= d.relative.x * 0.0055 * k
-			cam_pitch = clampf(cam_pitch - d.relative.y * 0.0035 * k, -0.9, -0.05)
-			manual_cam_t = 2.0
+			yaw_off -= d.relative.x * 0.0055 * k
+			pitch_off = clampf(pitch_off - d.relative.y * 0.0035 * k, -0.9 - cam_pitch, -0.05 - cam_pitch)
 	elif event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.device == InputEvent.DEVICE_ID_EMULATION:
@@ -1356,9 +1383,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mm := event as InputEventMouseMotion
 		if mm.device == InputEvent.DEVICE_ID_EMULATION:
 			return
-		cam_yaw -= mm.relative.x * 0.005
-		cam_pitch = clampf(cam_pitch - mm.relative.y * 0.004, -0.9, -0.05)
-		manual_cam_t = 2.5
+		yaw_off -= mm.relative.x * 0.005
+		pitch_off = clampf(pitch_off - mm.relative.y * 0.004, -0.9 - cam_pitch, -0.05 - cam_pitch)
 
 func _place_at(x: float, z: float) -> String:
 	if in_home:
@@ -1382,8 +1408,8 @@ func _process(delta: float) -> void:
 		if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN): kz -= 1.0
 		if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT): kx += 1.0
 		if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT): kx -= 1.0
-		if Input.is_physical_key_pressed(KEY_Q): cam_yaw += delta * 1.8; manual_cam_t = 2.5
-		if Input.is_physical_key_pressed(KEY_E): cam_yaw -= delta * 1.8; manual_cam_t = 2.5
+		if Input.is_physical_key_pressed(KEY_Q): yaw_off += delta * 1.8
+		if Input.is_physical_key_pressed(KEY_E): yaw_off -= delta * 1.8
 	# joystick: ölü bölge, yumuşak tepki, ekranda hep görünür
 	var jr := joy_raw
 	var jl := jr.length()
@@ -1407,12 +1433,14 @@ func _process(delta: float) -> void:
 	if dbg_walk != Vector3.ZERO:
 		player.move_input = dbg_walk
 
-	manual_cam_t -= delta
-	# kamera yumuşakça karakterin arkasına döner; geri geri yürürken dönmez
-	if manual_cam_t <= 0.0 and player.moving and f_in > -0.3 and play.is_empty():
-		var sideways := absf(r_in)
-		var rate := 0.7 + sideways * 1.6
-		cam_yaw = lerp_angle(cam_yaw, player.facing + PI, minf(1.0, delta * rate))
+	# kamera hep karakterin arkasında; geri geri yürürken dönmez
+	if f_in > -0.3 and (play.is_empty() or player.moving):
+		cam_yaw = lerp_angle(cam_yaw, player.facing + PI, minf(1.0, delta * (3.5 + absf(r_in) * 1.5)))
+	# elle bakış: parmak/fare bırakılınca kamera yerine döner (oyun sırasında kalır)
+	var looking := look_id != -1 or mouse_drag or Input.is_physical_key_pressed(KEY_Q) or Input.is_physical_key_pressed(KEY_E)
+	if not looking and play.is_empty():
+		yaw_off = lerp_angle(yaw_off, 0.0, minf(1.0, delta * 4.0))
+		pitch_off = lerpf(pitch_off, 0.0, minf(1.0, delta * 4.0))
 	var look_ahead := Vector3(player.velocity.x, 0, player.velocity.z) * 0.22
 	var target := player.global_position + Vector3(0, 1.5, 0) + look_ahead
 	var pp := pivot.global_position
@@ -1420,7 +1448,7 @@ func _process(delta: float) -> void:
 	pp.z = lerpf(pp.z, target.z, minf(1.0, delta * 12.0))
 	pp.y = lerpf(pp.y, target.y, minf(1.0, delta * 3.0))
 	pivot.global_position = pp
-	pivot.rotation = Vector3(cam_pitch, cam_yaw, 0)
+	pivot.rotation = Vector3(cam_pitch + pitch_off, cam_yaw + yaw_off, 0)
 
 	var best = null
 	var bd := 2.4
