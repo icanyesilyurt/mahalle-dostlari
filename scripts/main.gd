@@ -250,6 +250,11 @@ func _make_pigeons() -> void:
 	var neck := StandardMaterial3D.new(); neck.albedo_color = Color("#5f7a6e")
 	var beak := StandardMaterial3D.new(); beak.albedo_color = Color("#e0a050")
 	var flocks := [Vector3(-10, 0, 10), Vector3(42, 0, 240), Vector3(30, 0, -192), Vector3(-30, 0, 2), Vector3(180, 0, -300)]
+	if city != "istanbul":
+		# diğer şehirlerde sürüler meydan çeşmelerinin yanında
+		flocks.clear()
+		for fo in MAP.get("fountains", []):
+			flocks.append(Vector3(float(fo[0]) + 9.0, 0, float(fo[1]) + 6.0))
 	for f in flocks:
 		for i in 9:
 			var pn := Node3D.new()

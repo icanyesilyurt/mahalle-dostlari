@@ -104,6 +104,8 @@ static func build(B) -> Dictionary:
 		"mini_extra": [[-156, -144, -42, 25, "#9aa58a"], [-35, -25, -42, 25, "#c9bda6"], [75, 85, -42, 25, "#c9bda6"], [194, 206, -42, 25, "#7a8a9a"]],
 		"water": [[-260, 280, -42, 25]],
 		"walk_over": walk, "fishing": walk,
+		"carts": [["Fish & Chips", "#1f3a5a"], ["Tea", "#2f7d6d"], ["Ice Cream", "#c8423a"], ["Pies", "#8a5a3a"]],
+		"fishers": [[-150.0, -40.0, 23.0, 12.0, true], [-30.0, -40.0, 23.0, 10.0, true], [80.0, -40.0, 23.0, 10.0, true]],
 		"bounds": Rect2(-240, -515, 500, 825),
 		"start": [-120.0, -46.0, -1.2],
 		"fountains": [[-125, -318], [-95, -318], [-200, -295], [-150, -300], [80, -110], [-100, 70]],
@@ -278,13 +280,30 @@ static func tower_of_london(B, cx: float, cz: float) -> void:
 	var g = B.g
 	var S: Color = B.stone(B.C("#cfc3a4"))
 	# dış sur
+	# sur kapıları: içinden geçen sokakların hizasında 6 m aralık
+	var gx := [cx - 27.0, cx + 13.0]
+	var gz := [cz - 3.0]
 	for e: float in [-1.0, 1.0]:
-		g.box(70, 7, 3, cx, 0, cz + e * 38, S)
-		g.box(3, 7, 76, cx + e * 35, 0, cz, S)
-		B.add_col(cx - 35, cx + 35, cz + e * 38 - 1.5, cz + e * 38 + 1.5)
-		B.add_col(cx + e * 35 - 1.5, cx + e * 35 + 1.5, cz - 38, cz + 38)
-	for k in 24:
-		g.box(1.0, 1.0, 3.2, cx - 34 + k * 3.0, 7.0, cz + 38, S)
+		var a := cx - 35.0
+		for gp: float in gx + [cx + 35.0 + 3.0]:
+			var b := gp - 3.0
+			if b > a:
+				g.box(b - a, 7, 3, (a + b) / 2.0, 0, cz + e * 38, S)
+				B.add_col(a, b, cz + e * 38 - 1.5, cz + e * 38 + 1.5)
+				for k in int((b - a) / 3.0):
+					g.box(1.0, 1.0, 3.2, a + 1.5 + k * 3.0, 7.0, cz + e * 38, S)
+			a = gp + 3.0
+		var c := cz - 38.0
+		for gp2: float in gz + [cz + 38.0 + 3.0]:
+			var d := gp2 - 3.0
+			if d > c:
+				g.box(3, 7, d - c, cx + e * 35, 0, (c + d) / 2.0, S)
+				B.add_col(cx + e * 35 - 1.5, cx + e * 35 + 1.5, c, d)
+			c = gp2 + 3.0
+		for gp3: float in gx:
+			g.box(7.4, 1.4, 3.4, gp3, 5.6, cz + e * 38, S.darkened(0.1))
+		for gp4: float in gz:
+			g.box(3.4, 1.4, 7.4, cx + e * 35, 5.6, gp4, S.darkened(0.1))
 	for e2: Vector2 in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		g.put("cyl", Vector3(cx + e2.x * 35, 5, cz + e2.y * 38), S, 0, Vector3(4, 10, 4), "stonewall")
 	# Beyaz Kule

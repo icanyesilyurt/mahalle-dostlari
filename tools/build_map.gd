@@ -696,15 +696,69 @@ func build_galata_kulesi(x: float, z: float) -> void:
 	big_label("Galata Kulesi", Vector3(x, 50, z), 140)
 
 func fisherman(x: float, z: float, side: float) -> void:
+	fisherman_dir(x, z, side, 0.0)
+
+## Balıkçı: (dx,dz) yönüne, korkuluk üstünden suya olta sallar
+func fisherman_dir(x: float, z: float, dx: float, dz: float) -> void:
 	# balıkçının kendisi oyunda karakter olarak yerleşir (satıcılar gibi)
-	vendors.append([snappedf(x, 0.1), snappedf(z, 0.1), side * PI / 2])
+	vendors.append([snappedf(x, 0.1), snappedf(z, 0.1), atan2(dx, dz)])
 	add_col(x - 0.35, x + 0.35, z - 0.35, z + 0.35, 2.0, false, 2)
-	var tip := Vector3(x + side * 3.6, 3.2, z)
-	var base := Vector3(x + side * 0.2, 1.0, z)
-	var ang := atan2(tip.y - base.y, absf(tip.x - base.x))
-	g.put("cyl8", (tip + base) / 2.0, C("#2a2a2a"), 0, Vector3(0.025, tip.distance_to(base), 0.025), "plain", 0, side * -(PI / 2 - ang))
+	var d := Vector3(dx, 0, dz)
+	var tip := Vector3(x, 3.2, z) + d * 3.6
+	var base := Vector3(x, 1.0, z) + d * 0.2
+	var ang := atan2(tip.y - base.y, 3.4)
+	g.put("cyl8", (tip + base) / 2.0, C("#2a2a2a"), atan2(-dz, dx), Vector3(0.025, tip.distance_to(base), 0.025), "plain", 0, -(PI / 2 - ang))
 	g.box(0.012, 3.8, 0.012, tip.x, -0.6, tip.z, C("#e8e8e8"))
-	g.put("cyl8", Vector3(x - side * 0.5, 0.25, z + 0.3), C("#3f86b0"), 0, Vector3(0.18, 0.5, 0.18))
+	var perp := Vector3(-dz, 0, dx)
+	g.put("cyl8", Vector3(x, 0.25, z) - d * 0.5 + perp * 0.3, C("#3f86b0"), 0, Vector3(0.18, 0.5, 0.18))
+
+## Köprü boyunca iki korkuluğa balıkçı dizer. along_z: köprü z ekseninde uzanır (merkez c = x)
+func bridge_fishers(c: float, s0: float, s1: float, w: float, along_z: bool, every: float = 9.0) -> void:
+	for side: float in [-1.0, 1.0]:
+		var s := s0 + (every * 0.5 if side > 0 else 0.0)
+		while s < s1:
+			var off := c + side * (w / 2.0 - 1.0)
+			var px := off if along_z else s
+			var pz := s if along_z else off
+			if not _blocked_at(px, pz):
+				if along_z:
+					fisherman_dir(px, pz, side, 0.0)
+				else:
+					fisherman_dir(px, pz, 0.0, side)
+			s += every
+
+## Seyyar satıcı arabaları: çeşmelerin çevresinde boş yer bulup yerleştirir
+func auto_carts(fountains: Array, kinds: Array, water: Array, maxn: int = 8) -> void:
+	var placed := []
+	var ki := 0
+	for f in fountains:
+		if placed.size() >= maxn:
+			break
+		for rad: float in [9.0, 12.0, 15.0]:
+			var done := false
+			for k in 8:
+				var a := k * TAU / 8.0 + 0.3
+				var x: float = f[0] + cos(a) * rad
+				var z: float = f[1] + sin(a) * rad
+				var ok := true
+				for p in placed:
+					if Vector2(x, z).distance_to(p) < 25.0:
+						ok = false
+				for w in water:
+					if x > w[0] - 3 and x < w[1] + 3 and z > w[2] - 3 and z < w[3] + 3:
+						ok = false
+				for pt in [Vector2(x - 0.9, z - 0.6), Vector2(x + 0.9, z - 0.6), Vector2(x - 0.9, z + 0.6), Vector2(x + 0.9, z + 0.6), Vector2(x, z - 1.3), Vector2(x, z - 2.2)]:
+					if ok and _blocked_at(pt.x, pt.y):
+						ok = false
+				if ok:
+					var kd: Array = kinds[ki % kinds.size()]
+					ki += 1
+					street_cart(x, z, kd[0], C(kd[1]))
+					placed.append(Vector2(x, z))
+					done = true
+					break
+			if done:
+				break
 
 func build_bridge(z0: float, z1: float) -> void:
 	g.box(16, 0.7, z1 - z0, 0, -0.72, (z0 + z1) / 2.0, C("#7f8a8f"))
@@ -1543,7 +1597,8 @@ func stone_bridge(name: String, x: float, z0: float, z1: float, w: float, col: C
 	var L := z1 - z0
 	for k in arches:
 		var az := z0 + (k + 0.5) * L / arches
-		g.put("cyl", Vector3(x, -1.0, az), col.darkened(0.15), 0, Vector3(L / arches * 0.42, w + 0.2, L / arches * 0.42), "plain", 0.0, PI / 2.0)
+		var ad := L / arches * 0.42
+		g.put("cyl", Vector3(x, -0.8 - ad, az), col.darkened(0.15), 0, Vector3(ad, w + 0.2, ad), "plain", 0.0, PI / 2.0)
 		if k > 0:
 			g.box(w + 0.6, 2.0, 1.4, x, -2.4, z0 + k * L / arches, col)
 	road(name, x - w / 2.0, x + w / 2.0, z0, z1)
@@ -1617,6 +1672,9 @@ func _init_city() -> void:
 		return
 	var data: Dictionary = CityB.build(self)
 	lands = data.lands
+	auto_carts(data.fountains, data.get("carts", [["Dondurma", "#3b6aa8"]]), data.water)
+	for fb in data.get("fishers", []):
+		bridge_fishers(fb[0], fb[1], fb[2], fb[3], fb[4])
 	mini_extra = data.get("mini_extra", [])
 	place_animals_generic(data.get("fixed_animals", []), data.cat_names, data.dog_names, data.get("street_animals", 22))
 	place_npc_paths_generic(data.get("extra_npcs", []))

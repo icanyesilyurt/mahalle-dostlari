@@ -52,9 +52,13 @@ static func build(B) -> Dictionary:
 	# --- Vatikan: San Pietro ve meydan
 	san_pietro(B, -195.0, -440.0)
 	# --- Trastevere (batı yaka)
-	B.grid([-237.0, -195.0, -153.0], [-275.0, -230.0, -185.0, -140.0, -95.0, -50.0, -5.0, 40.0, 85.0, 130.0, 175.0, 220.0, 265.0, 307.0], st, ["Via della Lungara", "Via Garibaldi", "Via di Trastevere"], NAMES_H.slice(6), [], 5.0, "Trastevere")
+	B.grid([-237.0, -195.0, -153.0], [-275.0, -230.0, -185.0, -140.0, -95.0, -50.0, -5.0, 40.0, 85.0, 130.0, 175.0, 220.0, 265.0, 307.0], st, ["Via della Lungara", "Via Garibaldi", "Via di Trastevere"], NAMES_H.slice(6), [[-236.0, -154.0, -94.0, -55.0]], 5.0, "Trastevere")
 	g.ground(-237, -153, -96, -54, 0.02, "slab", 6.0)
 	B.fountain_round(-195, -75, 4.5)
+	B.cafe_row(-230.0, -90.0, 4, 3.0, 0.0)
+	for bx: float in [-215.0, -175.0]:
+		B.bench(bx, -62.0, PI)
+		B.bench(bx, -88.0, 0.0)
 	B.area("Piazza di Santa Maria in Trastevere", -237, -153, -96, -54)
 
 	# --- Doğu yaka: tarihi merkez
@@ -113,6 +117,8 @@ static func build(B) -> Dictionary:
 		"mini_extra": [[-150, -112, -304.5, -295.5, "#c9bda6"], [-150, -112, -64, -56, "#c9bda6"], [-150, -112, 144, 156, "#c9bda6"]],
 		"water": [[-150, -112, -515, 310]],
 		"walk_over": walk, "fishing": walk,
+		"carts": [["Gelato", "#e58a3a"], ["Pizza", "#c8423a"], ["Caffè", "#5e4337"], ["Granita", "#3b6aa8"]],
+		"fishers": [[-300.0, -147.0, -115.0, 9.0, false], [-60.0, -147.0, -115.0, 8.0, false], [150.0, -147.0, -115.0, 12.0, false]],
 		"bounds": Rect2(-240, -515, 500, 825),
 		"start": [100.0, -150.0, 0.0],
 		"fountains": [[-70, -280], [-70, -240], [-70, -200], [62, -275], [-10, -222], [-195, -75], [137, -405], [103, -495]],
@@ -145,7 +151,7 @@ static func bridge_x(B, name: String, z: float, x0: float, x1: float, w: float) 
 				g.put("cyl8", Vector3(sx, 2.8, z + e * (w / 2.0 - 0.3)), B.C("#efe8da"), 0, Vector3(0.35, 1.8, 0.35))
 				g.put("ball", Vector3(sx, 3.9, z + e * (w / 2.0 - 0.3)), B.C("#efe8da"), 0, Vector3(0.3, 0.3, 0.3))
 	for k in 3:
-		g.put("cyl", Vector3(x0 + (k + 0.5) * (x1 - x0) / 3.0, -1.0, z), col.darkened(0.15), 0, Vector3(5.0, w + 0.2, 5.0), "plain", PI / 2.0, 0.0)
+		g.put("cyl", Vector3(x0 + (k + 0.5) * (x1 - x0) / 3.0, -5.8, z), col.darkened(0.15), 0, Vector3(5.0, w + 0.2, 5.0), "plain", PI / 2.0, 0.0)
 	B.road(name, x0, x1, z - w / 2.0, z + w / 2.0)
 
 static func san_pietro(B, cx: float, cz: float) -> void:
@@ -316,10 +322,12 @@ static func forum(B, x0: float, x1: float, z0: float, z1: float) -> void:
 		var rz: float = B.rng.randf_range(z0 + 5, z1 - 5)
 		g.box(B.rng.randf_range(2, 6), B.rng.randf_range(0.6, 3.5), B.rng.randf_range(1, 2), rx, 0, rz, B.C("#c4b496"), B.rng.randf())
 	# Titus takı
-	g.box(12, 13, 5, x1 - 10, 0, (z0 + z1) / 2.0, B.stone(B.C("#d9cdb3")))
-	g.box(4.5, 8, 5.2, x1 - 10, 0, (z0 + z1) / 2.0, B.C("#3a3430"))
-	B.add_col(x1 - 16, x1 - 12.5, (z0 + z1) / 2.0 - 2.5, (z0 + z1) / 2.0 + 2.5)
-	B.add_col(x1 - 7.5, x1 - 4, (z0 + z1) / 2.0 - 2.5, (z0 + z1) / 2.0 + 2.5)
+	# Titus takı: Via Sacra kemerin altından geçer
+	var mz := (z0 + z1) / 2.0
+	for e: float in [-1.0, 1.0]:
+		g.box(5, 13, 3.6, x1 - 10, 0, mz + e * 4.0, B.stone(B.C("#d9cdb3")))
+		B.add_col(x1 - 12.5, x1 - 7.5, mz + e * 4.0 - 1.8, mz + e * 4.0 + 1.8)
+	g.box(5, 4.6, 12, x1 - 10, 8.4, mz, B.stone(B.C("#d9cdb3")))
 	B.flush_chunk("Forum")
 
 static func colosseo(B, cx: float, cz: float) -> void:

@@ -3,8 +3,12 @@ extends SceneTree
 var frames := 0
 var mapd: Dictionary
 func _init():
-	mapd = JSON.parse_string(FileAccess.get_file_as_string("res://map/istanbul.json"))
-	var m: Node3D = (load("res://map/istanbul.scn") as PackedScene).instantiate()
+	var city := "istanbul"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--city="):
+			city = a.substr(7)
+	mapd = JSON.parse_string(FileAccess.get_file_as_string("res://map/%s.json" % city))
+	var m: Node3D = (load("res://map/%s.scn" % city) as PackedScene).instantiate()
 	root.add_child(m)
 func _process(_d):
 	frames += 1
@@ -28,11 +32,31 @@ func _process(_d):
 			q.transform = Transform3D(Basis(), p)
 			var hit := space.intersect_shape(q, 1)
 			if hit.size() > 0:
-				var col: Object = hit[0].collider
-				blocked.append("%s @ %.1f,%.1f by %s" % [r[0], p.x, p.z, str((col as Node3D).global_position)])
+				# yol genişliği boyunca bir geçit var mı?
+				var half := ((z1 - z0) if horiz else (x1 - x0)) / 2.0
+				var free := false
+				var o := -half + 0.45
+				while o <= half - 0.45 and not free:
+					var p2 := p + (Vector3(0, 0, o) if horiz else Vector3(o, 0, 0))
+					q.transform = Transform3D(Basis(), p2)
+					if space.intersect_shape(q, 1).size() == 0:
+						free = true
+					o += 0.3
+				if not free:
+					var co: CollisionObject3D = hit[0].collider
+					var oid := co.shape_find_owner(hit[0].shape)
+					var cs: Node3D = co.shape_owner_get_owner(oid)
+					var shp: Shape3D = co.shape_owner_get_shape(oid, 0)
+					var ext := (shp as BoxShape3D).size if shp is BoxShape3D else Vector3.ZERO
+					blocked.append("%s @ %.1f,%.1f by %s %s" % [r[0], p.x, p.z, str(cs.global_position), str(ext)])
 			s += 2.0
 	print("BLOCKED ", blocked.size())
+	var seen := {}
 	for b in blocked:
-		print(b)
+		var key: String = b.split(" @ ")[0] + "|" + b.split(" by ")[1]
+		if not seen.has(key):
+			seen[key] = 0
+			print(b)
+		seen[key] += 1
 	quit()
 	return true
