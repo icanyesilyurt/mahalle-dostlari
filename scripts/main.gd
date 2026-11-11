@@ -557,7 +557,7 @@ func _tick_home(delta: float) -> void:
 			pet_node.mode = "go"
 
 # --- pasaport: şehirler sırayla açılır ---
-const CITY_ORDER := ["istanbul", "paris", "roma", "londra"]
+const CITY_ORDER := ["istanbul", "paris", "roma", "londra", "barselona"]
 const UNLOCK_FRIENDS := 15
 const UNLOCK_PTS := 1500
 

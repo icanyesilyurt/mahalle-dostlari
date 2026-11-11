@@ -6,7 +6,7 @@ G=$SP/dl/Godot_v4.4.1-stable_linux.x86_64
 cd "$(dirname "$0")/.."
 VER=$(grep -o 'version/code=[0-9]*' export_presets.cfg | head -1 | cut -d= -f2)
 echo $VER > version.txt
-for C in paris roma londra; do
+for C in paris roma londra barselona; do
   timeout 300 $G --headless --export-pack "Pack_$C" docs/$C.pck > $SP/out/pack_$C.log 2>&1
 done
 timeout 400 $G --headless --export-release "Web" docs/index.html > $SP/out/web.log 2>&1
