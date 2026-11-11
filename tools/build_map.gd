@@ -396,6 +396,32 @@ func house_row(ax: float, az: float, ux: float, uz: float, L: float, nx: float, 
 				var dz := fz + uz * du + nz * 0.05
 				g.wall_box(1.0, 1.6, 0.8, dx, h + 0.5, dz, C("#e8e2d6"), ry, "win_a", 1.0, 1.6)
 				g.put("pyr", Vector3(dx, h + 2.1, dz), pick(rcols), ry, Vector3(1.2, 0.5, 1.0))
+		elif rk == "gable":
+			# Amsterdam: sokağa bakan basamaklı / çan / boyun alınlık + vinç kirişi
+			g.put("hip" if w > d else "pyr", Vector3(cx, h + 0.1, cz), pick(rcols), ry, Vector3(w + 0.3, 3.2 + rng.randf() * 0.8, d + 0.3), "roof")
+			var gx := fx - nx * 0.25; var gz := fz - nz * 0.25
+			var gc := col
+			gc.a = 1.0
+			var gk := rng.randi() % 3
+			var gtop := h
+			if gk == 0:
+				for q in 3:
+					g.box(w * (0.92 - q * 0.26), 1.1, 0.5, gx, h + q * 1.1, gz, gc, ry)
+					g.box(w * (0.92 - q * 0.26) + 0.12, 0.14, 0.62, gx, h + q * 1.1 + 1.1, gz, trim, ry)
+				gtop = h + 3.3
+			elif gk == 1:
+				g.box(w * 0.7, 1.9, 0.5, gx, h, gz, gc, ry)
+				g.put("dome", Vector3(gx, h + 1.9, gz), gc, ry, Vector3(w * 0.35, 0.9, 0.25))
+				for e3: float in [-1.0, 1.0]:
+					g.put("ico", Vector3(gx + ux * e3 * w * 0.42, h + 0.4, gz + uz * e3 * w * 0.42), trim, 0, Vector3(0.35, 0.45, 0.3))
+				gtop = h + 2.8
+			else:
+				g.box(w * 0.92, 0.9, 0.5, gx, h, gz, gc, ry)
+				g.box(w * 0.48, 2.3, 0.5, gx, h + 0.9, gz, gc, ry)
+				g.put("pyr", Vector3(gx, h + 3.2, gz), trim, ry, Vector3(w * 0.55, 0.6, 0.62))
+				gtop = h + 3.8
+			g.wall_box(0.9, 1.1, 0.1, gx + nx * 0.27, h + 0.55, gz + nz * 0.27, C("#e8e2d6"), ry, "win_a", 0.9, 1.1)
+			g.box(0.16, 0.16, 1.0, gx + nx * 0.5, gtop - 0.6, gz + nz * 0.5, C("#3a2e28"), ry)
 		elif rk == "flat":
 			# düz teras çatı + korkuluk
 			g.box(w + 0.1, 0.9, 0.18, fx - nx * 0.05, h, fz - nz * 0.05, trim, ry)

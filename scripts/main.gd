@@ -43,6 +43,7 @@ const CITIES := {
 	"roma": {"loc": "Roma'da", "name": "Roma", "hello": "Benvenuto! Roma'nın meydanlarında dostlar seni bekliyor"},
 	"londra": {"loc": "Londra'da", "name": "Londra", "hello": "Welcome! Londra sokaklarında dostlar seni bekliyor"},
 	"barselona": {"loc": "Barselona'da", "name": "Barselona", "hello": "Benvinguts! Barselona'da dostlar seni bekliyor"},
+	"amsterdam": {"loc": "Amsterdam'da", "name": "Amsterdam", "hello": "Welkom! Amsterdam kanallarında dostlar seni bekliyor"},
 }
 var tram2: Node3D
 var tram2_s := 0.0
@@ -557,7 +558,7 @@ func _tick_home(delta: float) -> void:
 			pet_node.mode = "go"
 
 # --- pasaport: şehirler sırayla açılır ---
-const CITY_ORDER := ["istanbul", "paris", "roma", "londra", "barselona"]
+const CITY_ORDER := ["istanbul", "paris", "roma", "londra", "barselona", "amsterdam"]
 const UNLOCK_FRIENDS := 15
 const UNLOCK_PTS := 1500
 
