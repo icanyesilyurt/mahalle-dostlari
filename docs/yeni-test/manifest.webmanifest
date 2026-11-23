@@ -1,0 +1,10 @@
+{
+  "name": "Mahalle Dostları",
+  "short_name": "Mahalle",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#f2b98e",
+  "theme_color": "#f07f6a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

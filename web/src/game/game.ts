@@ -6,7 +6,12 @@ import { Breed, BreedLook, breedById, itemById } from '../core/catalog';
 import { GameState, feedStray, petStray, refillWater, waterStray, save } from '../core/state';
 import { TEX, rng } from '../world/kit';
 import { petHouse } from '../world/pethouse';
-import { CITY_BUILDERS, WorldData, blocked, collide, makeMaterials, onLand } from '../world/world';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { CITY_BUILDERS, WorldData, blocked, collide, getKits, makeMaterials, onLand } from '../world/world';
 import { haptic, sfx } from '../ui/sfx';
 import { Input } from './input';
 
@@ -65,6 +70,11 @@ export class Game {
   lowEnd: boolean;
   placing: { item: string; ghost: THREE.Object3D; rot: number; valid: boolean } | null = null;
   paused = false;
+  // yeni görünüm (hazır modeller): ACES + ortam gölgesi (SSAO/GTAO) + hafif bloom. AO telefonda kapatılabilir.
+  private composer: EffectComposer | null = null;
+  private gtao: GTAOPass | null = null;
+  private bloom: UnrealBloomPass | null = null;
+  gfx = { ao: true, bloom: true };
 
   constructor(private canvas: HTMLCanvasElement, public state: GameState, public input: Input, private ev: GameEvents) {
     this.lowEnd = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
@@ -77,6 +87,7 @@ export class Game {
     this.labelsEl = document.getElementById('labels')!;
     this.setupScene();
     this.loadCity(state.city);
+    if (getKits()) this.setupPost();
     addEventListener('resize', () => this.resize());
     this.resize();
   }
@@ -112,9 +123,38 @@ export class Game {
     this.ring.rotation.x = -Math.PI / 2; this.ring.visible = false; s.add(this.ring);
   }
 
+  private setupPost() {
+    try { const g = JSON.parse(localStorage.getItem('md-gfx') || 'null'); if (g) this.gfx = { ...this.gfx, ...g }; else this.gfx.ao = !this.lowEnd; } catch { this.gfx.ao = !this.lowEnd; }
+    const s = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const rt = new THREE.WebGLRenderTarget(s.x, s.y, { type: THREE.HalfFloatType, samples: this.lowEnd ? 0 : 4 });
+    const c = new EffectComposer(this.renderer, rt);
+    c.addPass(new RenderPass(this.scene, this.camera));
+    const ao = new GTAOPass(this.scene, this.camera, s.x, s.y);
+    ao.blendIntensity = 0.85;
+    ao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.4, thickness: 1.2, scale: 1.0, samples: 12 });
+    ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    c.addPass(ao);
+    const bl = new UnrealBloomPass(new THREE.Vector2(s.x / 2, s.y / 2), 0.22, 0.5, 0.92);
+    c.addPass(bl);
+    c.addPass(new OutputPass());
+    this.composer = c; this.gtao = ao; this.bloom = bl;
+    this.applyGfx();
+    // üst çubukta AO düğmesi
+    const b = document.createElement('button'); b.className = 'iconbtn gfx'; b.id = 'gfxBtn'; b.setAttribute('aria-label', 'Ortam gölgesi');
+    b.onclick = () => { this.gfx.ao = !this.gfx.ao; this.applyGfx(); try { localStorage.setItem('md-gfx', JSON.stringify(this.gfx)); } catch { /* */ } this.ev.toast(this.gfx.ao ? 'Ortam gölgesi açık (daha güzel)' : 'Ortam gölgesi kapalı (daha hızlı)'); };
+    document.getElementById('muteBtn')?.before(b);
+    this.applyGfx();
+  }
+
+  private applyGfx() {
+    if (this.gtao) this.gtao.enabled = this.gfx.ao;
+    if (this.bloom) this.bloom.enabled = this.gfx.bloom;
+    const b = document.getElementById('gfxBtn'); if (b) { b.textContent = 'AO'; b.classList.toggle('off', !this.gfx.ao); }
+  }
+
   loadCity(id: string) {
     const mats = makeMaterials();
-    this.world = CITY_BUILDERS[id](mats, this.lowEnd);
+    this.world = CITY_BUILDERS[id](mats, this.lowEnd, getKits());
     this.scene.add(this.world.root);
     this.pos.copy(this.world.spawn); this.yaw = this.world.spawnYaw; this.camYaw = this.yaw;
     this.player = new Human(this.state.look);
@@ -309,6 +349,7 @@ export class Game {
   resize() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h, false);
+    if (this.composer) { const s = this.renderer.getDrawingBufferSize(new THREE.Vector2()); this.composer.setSize(w, h); this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.gtao?.setSize(s.x, s.y); }
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? 68 : 57;
     this.camera.near = 0.3; this.camera.far = 320;
@@ -320,10 +361,12 @@ export class Game {
       requestAnimationFrame(loop);
       const dt = Math.min(0.05, this.clock.getDelta());
       if (!this.paused) this.update(dt);
-      this.renderer.render(this.scene, this.camera);
+      this.draw();
     };
     loop();
   }
+
+  draw() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
 
   private update(dt: number) {
     const inp = this.input.poll();
@@ -481,7 +524,7 @@ export class Game {
     for (const s of this.strays) { const d = s.pet.root.position.distanceTo(this.pos); if (d < bd) { bd = d; best = s; } }
     let bc: Companion | null = null;
     if (!best) for (const c of [this.companion, ...this.homePets]) if (c) { const d = c.pet.root.position.distanceTo(this.pos); if (d < 2.4 && d < bd) { bd = d; bc = c; } }
-    const nf = this.world.fountains.some(f => f.distanceTo(this.pos) < 3.2);
+    const nf = this.world.fountains.some(f => f.distanceTo(this.pos) < (this.world.fountainR ?? 3.2));
     const changed = best !== this.near || bc !== this.nearCompanion || nf !== this.nearFountain;
     this.near = best; this.nearCompanion = bc; this.nearFountain = nf;
     const target = best?.pet ?? bc?.pet;

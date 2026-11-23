@@ -7,6 +7,8 @@ import DATA from './data/istanbul.json';
 import { Batch, M, TEX, blob, hipRoof, rng } from './kit';
 import { bench, ferry, lamp, laundryLine } from './props';
 import type { Rect, WorldData, StraySpawn, NpcSpawn } from './world';
+import type { Kits } from './assets';
+import { buildShowcase, inShowcase, primReplaced } from './showcase';
 
 type House = [number, number, number, number, number, number, number, string, string, string];
 type Prim = [string, number, number, number, string, number, number, number, number, number, number, string];
@@ -163,7 +165,7 @@ function strayLook(a: any[]): StraySpawn {
   };
 }
 
-export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: boolean): WorldData {
+export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: boolean, kits?: Kits | null): WorldData {
   const R = rng(2027);
   const root = new THREE.Group();
   const b = new Batch(mats, { plaster: 3, wood: 1.2, roof: -1.4 });
@@ -176,6 +178,16 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   const groundMats = new Map<string, THREE.MeshLambertMaterial>();
   for (const [x0, x1, z0, z1, y, key, col] of D.grounds as [number, number, number, number, number, string, string][]) {
     const L = layer[key] ?? 1, mk = key + col;
+    if (!groundMats.has(mk) && kits) {
+      // gerçek dokulu zemin (ambientCG): yol = arnavut kaldırımı, meydan = yelpaze taş, kaldırım = kesme taş
+      const [c, n] = key === 'cobble' ? kits.tex.arnavut : key === 'slab' && col === 'ffffff' ? kits.tex.kaldirim : key === 'slab' ? kits.tex.tas : [null, null];
+      if (c) {
+        const rep = key === 'cobble' ? 1.6 : key === 'slab' && col === 'ffffff' ? 2.6 : 2.0;
+        const cc = c.clone(), nn = n!.clone(); cc.repeat.set(1 / rep, 1 / rep); nn.repeat.set(1 / rep, 1 / rep); cc.needsUpdate = nn.needsUpdate = true;
+        const tint = key === 'cobble' ? '#f2e6d6' : col === '77746f' ? '#8a857d' : '#fff4e6';
+        groundMats.set(mk, new THREE.MeshStandardMaterial({ map: cc, normalMap: nn, normalScale: new THREE.Vector2(1.6, 1.6), roughness: 0.92, color: tint, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }) as any);
+      }
+    }
     if (!groundMats.has(mk)) {
       const t = (texFor[key] ?? TEX.slab)(); t.repeat.set(1 / (tileFor[key] ?? 4), 1 / (tileFor[key] ?? 4));
       groundMats.set(mk, new THREE.MeshLambertMaterial({ map: t, color: '#' + col, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }));
@@ -188,7 +200,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     root.add(m);
   }
 
-  for (const h of D.houses as House[]) oldHouse(b, h, R);
+  for (const h of D.houses as House[]) if (!kits || !inShowcase(h[0], h[1])) oldHouse(b, h, R);
 
   for (const [ww, hh, dd, x, y, z, col, ry, key] of D.walls as Wall[]) {
     const k = key === 'shop' ? 'shop' : ['win_a', 'win_b', 'win_c'].includes(key) ? key : 'gf';
@@ -197,15 +209,19 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
 
   const keyMap: Record<string, string> = { plain: 'plain', roof: 'roof', gold: 'gold', stonewall: 'plaster' };
   for (const [name, x, y, z, col, rx, ry, rz, sx, sy, sz, key] of D.prims as Prim[]) {
+    if (kits && primReplaced(x, z)) continue;
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz));
     b.add(keyMap[key] ?? 'plain', prim(name), '#' + col, m);
   }
 
-  const colliders: Rect[] = (D.col as number[][]).map(rect);
+  const [fx0, fz0] = D.fountains[0] as number[];
+  const colliders: Rect[] = (D.col as number[][]).map(rect).filter(r => !kits || !(Math.abs(r.x - fx0) < 1 && Math.abs(r.z - fz0) < 1));
   const lots = colliders.slice();
-  for (const [x, z, kind, s] of D.trees as [number, number, string, number][]) { tree(b, x, z, kind, s, R); colliders.push({ x, z, hw: 0.4 * s, hd: 0.4 * s }); }
-  for (const [x, z] of D.lamps as number[][]) lamp(b, x, z, 1.4);
-  for (const [x, z, ry] of D.benches as number[][]) bench(b, x, z, ry);
+  for (const [x, z, kind, s] of D.trees as [number, number, string, number][]) { if (!kits || !inShowcase(x, z)) tree(b, x, z, kind, s, R); colliders.push({ x, z, hw: 0.4 * s, hd: 0.4 * s }); }
+  for (const [x, z] of D.lamps as number[][]) if (!kits || !inShowcase(x, z)) lamp(b, x, z, 1.4);
+  for (const [x, z, ry] of D.benches as number[][]) if (!kits || !inShowcase(x, z)) bench(b, x, z, ry);
+  let fountainR = 3.2;
+  if (kits) { const sc = buildShowcase(D, kits, !lowEnd); root.add(sc.group); colliders.push(...sc.colliders); fountainR = sc.fountainR; }
 
   // su
   const seaTex = waterTex();
@@ -232,7 +248,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     lands: (D.lands as number[][]).concat([D.bridge, D.pier]).map(([x0, x1, z0, z1]) => ({ x0, x1, z0, z1 })),
     spawn: new THREE.Vector3(start[0], 0, start[1]),
     spawnYaw: start[2],
-    fountain: fountains[0], fountains,
+    fountain: fountains[0], fountains, fountainR,
     strays: (D.animals as any[][]).filter(a => (a[6] ?? 0) < 0.5).map(strayLook),
     npcs: (D.vendors as number[][]).map(([x, z, ry]): NpcSpawn => ({ x, z, rot: ry, shirt: '#f4efe6', hat: 'kasket', role: 'Simitçi' })),
     open: (D.roads as any[][]).map(([, x0, x1, z0, z1]) => rect([x0, x1, z0, z1])),

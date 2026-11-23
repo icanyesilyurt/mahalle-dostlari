@@ -3,6 +3,7 @@ import { load, save } from './core/state';
 import { Game } from './game/game';
 import { Input } from './game/input';
 import { Hud } from './ui/hud';
+import { setKits } from './world/world';
 
 async function boot() {
   const msg = document.getElementById('loadMsg')!;
@@ -10,6 +11,11 @@ async function boot() {
   const state = load(Date.now());
   const hud = new Hud();
   const input = new Input(document.getElementById('c')!, document.getElementById('joy')!);
+  if (import.meta.env.VITE_SHOWCASE) {
+    msg.textContent = 'Sokaklar kuruluyor…';
+    const { loadKits } = await import('./world/assets');
+    setKits(await loadKits());
+  }
   msg.textContent = 'Kediler sokağa çıkıyor…';
   await new Promise(r => setTimeout(r, 30));
   const game = new Game(document.getElementById('c') as HTMLCanvasElement, state, input, {

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#f2c9a0" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mahalle Dostları" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" />
+  <title>Mahalle Dostları</title>
+  <script type="module" crossorigin src="./assets/index-CjPkJhzC.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CRhTXXNq.css">
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div id="labels"></div>
+  <div id="fx"></div>
+
+  <div id="hud">
+    <header class="topbar">
+      <button class="pill food" id="foodPill" data-icon="food"><b id="foodN">10/10</b><small id="foodT">dolu</small></button>
+      <div class="pill coin" id="coinPill" data-icon="coin"><b id="coinN">0</b><button class="plus" id="coinPlus" aria-label="Jeton">+</button></div>
+      <div class="pill gem" id="gemPill" data-icon="gem"><b id="gemN">0</b><button class="plus" id="gemPlus" aria-label="Elmas">+</button></div>
+      <button class="iconbtn" id="muteBtn" aria-label="Ses"></button>
+    </header>
+
+    <nav class="side">
+      <button id="nav-map" data-icon="map"><span>Harita</span></button>
+      <button id="nav-pets" data-icon="paw"><span>Petlerim</span></button>
+      <button id="nav-shop" data-icon="shop"><span>Mağaza</span></button>
+      <button id="nav-home" data-icon="home"><span>Ev</span></button>
+    </nav>
+
+    <div class="actions">
+      <button id="btnBall" class="act ctx" data-icon="ball"><span class="lbl">Top</span></button>
+      <button id="btnPet" class="act ctx" data-icon="heart"><span class="lbl">Sev</span></button>
+      <button id="btnWater" class="act mid" data-icon="water"><span class="lbl">Su</span><em id="waterN">5/5</em></button>
+      <button id="btnFood" class="act big" data-icon="food"><span class="lbl">Mama</span><em id="foodBadge">10</em></button>
+    </div>
+
+    <div id="joy" class="joy"><div class="knob"></div></div>
+
+    <div class="placebar">
+      <button id="plCancel" class="act mid ghost" data-icon="close"><span class="lbl">İptal</span></button>
+      <button id="plRotate" class="act mid" data-icon="rotate"><span class="lbl">Döndür</span></button>
+      <button id="plOk" class="act big okb" data-icon="check"><span class="lbl">Kur</span></button>
+    </div>
+  </div>
+
+  <div id="scrim"></div>
+  <section id="sheet">
+    <div class="grab"></div>
+    <header><h2 id="sheetTitle"></h2><button id="sheetClose" class="iconbtn dark" data-icon="close" aria-label="Kapat"></button></header>
+    <div id="sheetBody"></div>
+  </section>
+  <div id="modal" class="modal"></div>
+  <div id="toasts"></div>
+
+  <div id="loading"><div class="logo"><div class="paws"></div><h1>Mahalle<br><span>Dostları</span></h1><p id="loadMsg">Mahalle kuruluyor…</p><div class="lbar"><i></i></div></div></div>
+
+</body>
+</html>

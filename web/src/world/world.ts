@@ -4,6 +4,12 @@ import { TEX } from './kit';
 import { facadeMaterials } from './facade';
 import type { BreedLook, Species } from '../core/catalog';
 import { buildIstanbul } from './istanbul';
+import type { Kits } from './assets';
+
+/** Hazır model paketleri (yalnız vitrin/test derlemesinde yüklenir). */
+let KITS: Kits | null = null;
+export const setKits = (k: Kits | null) => { KITS = k; };
+export const getKits = () => KITS;
 
 export interface Rect { x: number; z: number; hw: number; hd: number }
 export interface StraySpawn { id: string; name: string; breed: string; x: number; z: number; look?: Partial<BreedLook> & { species: Species; body: string; pattern: BreedLook['pattern'] } }
@@ -22,6 +28,7 @@ export interface WorldData {
   spawnYaw: number;
   fountain: THREE.Vector3;
   fountains: THREE.Vector3[];
+  fountainR?: number;
   water: Rect[];
   parks: Rect[];
   landmarks: { name: string; x: number; z: number }[];
@@ -32,7 +39,7 @@ export interface WorldData {
 }
 
 /** Şehir kurucuları: yeni şehir = buraya bir satır. */
-export const CITY_BUILDERS: Record<string, (m: Record<string, THREE.Material>, lowEnd: boolean) => WorldData> = {
+export const CITY_BUILDERS: Record<string, (m: Record<string, THREE.Material>, lowEnd: boolean, kits?: Kits | null) => WorldData> = {
   istanbul: buildIstanbul,
 };
 

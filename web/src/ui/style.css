@@ -247,3 +247,10 @@ body.sheet-open #sheet { transform: translateY(0); }
   :root { --btn: 50px; --big: 74px; --mid: 58px; }
   .pill b { font-size: 15px; }
 }
+
+/* grafik (AO) düğmesi — yalnız yeni görünümde */
+.iconbtn.gfx { color: #fff; font: 800 12px/1 Baloo2, sans-serif; margin-left: 6px; }
+.topbar .iconbtn.gfx { margin-left: auto; }
+.topbar .iconbtn.gfx + #muteBtn { margin-left: 6px; }
+.iconbtn.gfx.off { opacity: .55; text-decoration: line-through; }
+@media (orientation: portrait) { .iconbtn.gfx { position: fixed; right: calc(var(--sar) + 10px); top: calc(var(--sat) + 58px); margin: 0; } }
