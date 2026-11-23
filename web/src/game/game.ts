@@ -2,11 +2,11 @@
 import * as THREE from 'three';
 import { Human } from '../actors/human';
 import { Pet } from '../actors/pet';
-import { breedById, itemById } from '../core/catalog';
+import { Breed, BreedLook, breedById, itemById } from '../core/catalog';
 import { GameState, feedStray, petStray, refillWater, waterStray, save } from '../core/state';
 import { TEX, rng } from '../world/kit';
 import { petHouse } from '../world/pethouse';
-import { CITY_BUILDERS, WorldData, blocked, collide, makeMaterials } from '../world/world';
+import { CITY_BUILDERS, WorldData, blocked, collide, makeMaterials, onLand } from '../world/world';
 import { haptic, sfx } from '../ui/sfx';
 import { Input } from './input';
 
@@ -39,9 +39,13 @@ export class Game {
   player!: Human;
   pos = new THREE.Vector3();
   yaw = 0;
-  camYaw = 0;
-  camZoom = 1;
+  camYaw = 0;            // kameranın baktığı yön (oyuncu ileri = bu yön)
+  camPitch = 0.21;       // aşağı bakış açısı (rad), 5°–20°
+  camDist = 4.6;         // oyuncu ile kamera arası (m), 3–7
+  private armDist = 4.6; // duvara çarpınca kısalan gerçek mesafe
+  private manualT = 0;
   private camTarget = new THREE.Vector3();
+  private sky!: THREE.Mesh;
   strays: Stray[] = [];
   companion: Companion | null = null;
   homePets: Companion[] = [];
@@ -55,7 +59,6 @@ export class Game {
   private tapStray: Stray | null = null;
   private marker!: THREE.Mesh;
   private ring!: THREE.Mesh;
-  private xray: { u: { pos: { value: THREE.Vector2 }; depth: { value: number }; rad: { value: number }; player: { value: THREE.Vector3 }; camDir: { value: THREE.Vector2 } } };
   private clock = new THREE.Clock();
   private labelsEl: HTMLElement;
   private gulls: THREE.Object3D[] = [];
@@ -72,7 +75,6 @@ export class Game {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
     this.labelsEl = document.getElementById('labels')!;
-    this.xray = { u: { pos: { value: new THREE.Vector2(-999, -999) }, depth: { value: 1 }, rad: { value: 120 }, player: { value: new THREE.Vector3() }, camDir: { value: new THREE.Vector2(0, 1) } } };
     this.setupScene();
     this.loadCity(state.city);
     addEventListener('resize', () => this.resize());
@@ -82,15 +84,23 @@ export class Game {
   // ---------- kurulum ----------
   private setupScene() {
     const s = this.scene;
-    s.background = TEX.sky();
-    s.fog = new THREE.Fog('#f2dcc6', 75, 240);
+    const FOG = '#f3dcc4';
+    s.background = new THREE.Color(FOG);
+    s.fog = new THREE.Fog(FOG, 70, 260);
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: { top: { value: new THREE.Color('#6fa8dc') }, mid: { value: new THREE.Color('#b9d7ec') }, hor: { value: new THREE.Color(FOG) } },
+      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 hor; varying vec3 vP; void main(){ float h = normalize(vP).y; vec3 c = h < 0.0 ? hor : mix(hor, mid, smoothstep(0.0, 0.18, h)); c = mix(c, top, smoothstep(0.18, 0.75, h)); gl_FragColor = vec4(c, 1.0); }',
+    }));
+    this.sky.renderOrder = -1; this.sky.frustumCulled = false; s.add(this.sky);
     s.add(new THREE.HemisphereLight('#fff0d8', '#9d8a74', 1.35));
     const sun = new THREE.DirectionalLight('#ffe0b0', 2.6);
     sun.castShadow = true;
     const sz = this.lowEnd ? 1024 : 2048;
     sun.shadow.mapSize.set(sz, sz);
     const c = sun.shadow.camera as THREE.OrthographicCamera;
-    c.left = -26; c.right = 26; c.top = 26; c.bottom = -26; c.near = 1; c.far = 120;
+    c.left = -42; c.right = 42; c.top = 42; c.bottom = -42; c.near = 1; c.far = 160;
     sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03; sun.shadow.radius = 3;
     s.add(sun, sun.target);
     this.sun = sun;
@@ -102,32 +112,11 @@ export class Game {
     this.ring.rotation.x = -Math.PI / 2; this.ring.visible = false; s.add(this.ring);
   }
 
-  /** Bina malzemelerine iki şey ekler: oyuncunun önündeki duvarı deldirme (daire)
-   *  ve kameraya bakan taraftaki yakın binaları zemin kat hizasında kesme (cutaway). */
-  private patchXray(m: THREE.Material) {
-    const u = this.xray.u;
-    m.onBeforeCompile = sh => {
-      sh.uniforms.xrPos = u.pos; sh.uniforms.xrDepth = u.depth; sh.uniforms.xrRad = u.rad;
-      sh.uniforms.xrP = u.player; sh.uniforms.xrC = u.camDir;
-      sh.vertexShader = sh.vertexShader.replace('void main() {', 'varying vec3 vXrW;\nvoid main() {')
-        .replace('#include <project_vertex>', '#include <project_vertex>\n  vXrW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      sh.fragmentShader = sh.fragmentShader.replace('void main() {', `uniform vec2 xrPos; uniform float xrDepth; uniform float xrRad; uniform vec3 xrP; uniform vec2 xrC;
-varying vec3 vXrW;
-float xrDither(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
-void main() {
-  float xa = dot(vXrW.xz - xrP.xz, xrC);
-  if (xa > 1.2 && xa < 17.0) { float e = smoothstep(2.1, 2.7, vXrW.y - xrP.y); if (xrDither(gl_FragCoord.xy) < e) discard; }
-  float xd = distance(gl_FragCoord.xy, xrPos);
-  if (gl_FragCoord.z < xrDepth - 0.0004 && xd < xrRad) { float e2 = smoothstep(xrRad * 0.6, xrRad, xd); if (xrDither(gl_FragCoord.xy) > e2) discard; }`);
-    };
-  }
-
   loadCity(id: string) {
     const mats = makeMaterials();
-    for (const k of ['plaster', 'plain', 'wood', 'roof', 'glass', 'leaf']) this.patchXray(mats[k]);
     this.world = CITY_BUILDERS[id](mats, this.lowEnd);
     this.scene.add(this.world.root);
-    this.pos.copy(this.world.spawn); this.yaw = Math.PI; this.camYaw = 0;
+    this.pos.copy(this.world.spawn); this.yaw = this.world.spawnYaw; this.camYaw = this.yaw;
     this.player = new Human(this.state.look);
     this.scene.add(this.player.root);
     this.makeGulls();
@@ -140,7 +129,7 @@ void main() {
     // sokak hayvanları
     const R = rng(99);
     for (const sp of this.world.strays) {
-      const breed = breedById(sp.breed)!;
+      const breed: Breed = sp.look ? { id: sp.id, species: sp.look.species, name: sp.name, price: {}, look: { size: 1, belly: '#f4efe6', ...sp.look } as BreedLook } : breedById(sp.breed)!;
       const pet = new Pet(breed, R.int(1, 9999));
       pet.root.position.set(sp.x, 0, sp.z);
       this.scene.add(pet.root);
@@ -321,9 +310,9 @@ void main() {
     const w = innerWidth, h = innerHeight;
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    this.camera.fov = w < h ? 60 : 45;
+    this.camera.fov = w < h ? 68 : 57;
+    this.camera.near = 0.3; this.camera.far = 320;
     this.camera.updateProjectionMatrix();
-    this.xray.u.rad.value = Math.min(w, h) * 0.17 * this.renderer.getPixelRatio();
   }
 
   start() {
@@ -340,8 +329,11 @@ void main() {
     const inp = this.input.poll();
     const t = performance.now() / 1000;
     // kamera girdisi
-    this.camYaw += inp.yawDelta;
-    this.camZoom = Math.min(1.5, Math.max(0.65, this.camZoom + inp.zoomDelta));
+    if (inp.yawDelta || inp.pitchDelta) this.manualT = 1.6;
+    this.manualT -= dt;
+    this.camYaw -= inp.yawDelta;
+    this.camPitch = THREE.MathUtils.clamp(this.camPitch + inp.pitchDelta, THREE.MathUtils.degToRad(5), THREE.MathUtils.degToRad(20));
+    this.camDist = THREE.MathUtils.clamp(this.camDist + inp.zoomDelta * 4, 3, 7);
 
     // dokun-git
     if (inp.tap) this.handleTap(inp.tap.x, inp.tap.y);
@@ -353,7 +345,7 @@ void main() {
     let wish = new THREE.Vector3();
     if (mag > 0.08) {
       this.tapTarget = null; this.tapStray = null; this.marker.visible = false;
-      const fwd = new THREE.Vector3(-Math.sin(this.camYaw), 0, -Math.cos(this.camYaw));
+      const fwd = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       wish.addScaledVector(fwd, my).addScaledVector(right, mx).normalize();
       mag = Math.min(1, mag);
@@ -374,7 +366,7 @@ void main() {
       this.yaw += dy * Math.min(1, dt * 12);
       const before = this.pos.clone();
       this.pos.addScaledVector(wish, speed * dt);
-      collide(this.pos, 0.35, this.world.colliders, this.world.bounds);
+      collide(this.pos, 0.35, this.world.colliders, this.world.bounds, this.world.lands, before);
       for (const o of this.houseObjs.values()) this.pushOut(this.pos, o.position, 0.9);
       const moved = this.pos.distanceTo(before) / dt;
       this.player.speed += (moved - this.player.speed) * Math.min(1, dt * 10);
@@ -384,7 +376,8 @@ void main() {
     this.player.root.rotation.y += ry * Math.min(1, dt * 14);
     this.player.update(dt);
     for (const n of this.npcs) n.update(dt);
-    if (Math.random() < dt * 0.05 && this.npcs[0] && !this.npcs[0].busy) this.npcs[0].act('wave', 1.6);
+    for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
+    if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
 
     // dünya canlıları
     this.updateStrays(dt);
@@ -393,33 +386,67 @@ void main() {
     this.updatePlacing();
     for (const l of this.world.laundry) l.rotation.z = Math.sin(t * 1.3 + l.userData.sway) * 0.06;
     this.world.sea.offset.set(t * 0.01, t * 0.006);
-    const boat = this.world.boat; boat.position.x += dt * 2.4; if (boat.position.x > 110) boat.position.x = -110; boat.position.y = -0.7 + Math.sin(t * 1.2) * 0.06;
+    const boat = this.world.boat; boat.position.z -= dt * 2.4; if (boat.position.z < -300) boat.position.z = 300; boat.position.y = -0.7 + Math.sin(t * 1.2) * 0.06;
     for (const g of this.gulls) { const u = g.userData; const a = t * u.sp + u.o; g.position.set(u.cx + Math.cos(a) * u.r, u.h + Math.sin(t * 0.7 + u.o), u.cz + Math.sin(a) * u.r); g.rotation.y = -a; const f = Math.sin(t * 6 + u.o) * 0.5; g.children[1].rotation.z = f; g.children[2].rotation.z = -f; }
     for (const s of this.strays) if (s.bowl && s.bowl.userData.grow < 1) { s.bowl.userData.grow = Math.min(1, s.bowl.userData.grow + dt * 5); s.bowl.scale.setScalar(s.bowl.userData.grow); }
 
     // yakındaki dost
     this.findNear();
 
-    // kamera
-    const portrait = innerWidth < innerHeight;
-    const dist = (portrait ? 18 : 14) * this.camZoom;
-    const pitch = portrait ? 0.98 : 0.86;
-    this.camTarget.lerp(this.pos.clone().add(new THREE.Vector3(0, 0.9, 0)), Math.min(1, dt * 6));
-    const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
-    this.camera.position.copy(this.camTarget).add(off);
-    this.camera.lookAt(this.camTarget);
-    // güneş ve gölge kamerası oyuncuyu izler
-    this.sun.position.copy(this.camTarget).add(new THREE.Vector3(-22, 38, 16));
-    this.sun.target.position.copy(this.camTarget);
-    // x-ray: oyuncunun ekran konumu
-    const sp = this.pos.clone().add(new THREE.Vector3(0, 0.8, 0)).project(this.camera);
-    const pr = this.renderer.getPixelRatio();
-    this.xray.u.pos.value.set((sp.x * 0.5 + 0.5) * innerWidth * pr, (sp.y * 0.5 + 0.5) * innerHeight * pr);
-    this.xray.u.depth.value = sp.z * 0.5 + 0.5;
-    this.xray.u.player.value.copy(this.camTarget).setY(0);
-    this.xray.u.camDir.value.set(Math.sin(this.camYaw), Math.cos(this.camYaw));
+    // kamera: omuz üstü, karşıya bakan. Yürürken yumuşakça arkaya geçer; elle döndürünce bir süre bekler.
+    if (this.player.speed > 0.6 && this.manualT <= 0) {
+      let dy = this.yaw - this.camYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      this.camYaw += dy * Math.min(1, dt * 2.4);
+    }
+    this.camTarget.lerp(this.pos, Math.min(1, dt * 10));
+    const fwd = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
+    const pivot = this.camTarget.clone().add(new THREE.Vector3(0, 1.5, 0));
+    // yay kolu: araya bina girerse kamera karaktere yaklaşır, duvardan geçmez
+    const want = this.camDist;
+    const free = this.armFree(pivot, fwd.clone().negate(), want + 0.4) - 0.4;
+    const armT = Math.max(1.0, Math.min(want, free));
+    this.armDist += (armT - this.armDist) * Math.min(1, dt * (armT < this.armDist ? 18 : 3));
+    const cp = Math.cos(this.camPitch), spch = Math.sin(this.camPitch);
+    const lift = Math.max(0, 2.4 - this.armDist) * 0.7; // çok yaklaşınca kafanın üstünden baksın
+    this.camera.position.copy(pivot).addScaledVector(fwd, -this.armDist * cp).add(new THREE.Vector3(0, this.armDist * spch + lift, 0));
+    this.camera.lookAt(this.camera.position.clone().add(new THREE.Vector3(fwd.x * cp, -spch, fwd.z * cp)));
+    this.sky.position.copy(this.camera.position);
+    // güneş yönü sabit; gölge kamerası gölge-dokusu ızgarasına oturtulur (kayıp titreme olmaz)
+    this.placeSun(this.camTarget.clone().addScaledVector(fwd, 14));
 
     this.updateLabels();
+  }
+
+  /** pivot'tan dir yönünde engelsiz mesafe (2B dikdörtgen çarpıştırıcılar, binalar yüksek kabul edilir). */
+  private armFree(p: THREE.Vector3, dir: THREE.Vector3, maxL: number): number {
+    let best = maxL;
+    for (const r of this.world.lots) {
+      const x0 = r.x - r.hw - 0.25, x1 = r.x + r.hw + 0.25, z0 = r.z - r.hd - 0.25, z1 = r.z + r.hd + 0.25;
+      if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1) continue; // karakter zaten içindeyse (ör. simge yapı avlusu) yok say
+      let t0 = 0, t1 = best;
+      for (const [o, d, a, b] of [[p.x, dir.x, x0, x1], [p.z, dir.z, z0, z1]]) {
+        if (Math.abs(d) < 1e-6) { if (o < a || o > b) { t0 = 1; t1 = 0; } continue; }
+        let ta = (a - o) / d, tb = (b - o) / d; if (ta > tb) [ta, tb] = [tb, ta];
+        t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+      }
+      if (t0 <= t1 && t0 < best) best = t0;
+    }
+    return best;
+  }
+
+  private sunDir = new THREE.Vector3(-0.45, 0.78, 0.34).normalize();
+  private placeSun(center: THREE.Vector3) {
+    const cam = this.sun.shadow.camera as THREE.OrthographicCamera;
+    const texel = (cam.right - cam.left) / this.sun.shadow.mapSize.x;
+    // ışık uzayına çevir, texel'e yuvarla, geri çevir
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), this.sunDir.clone().negate(), new THREE.Vector3(0, 1, 0)));
+    const inv = q.clone().invert();
+    const l = center.clone().applyQuaternion(inv);
+    l.x = Math.round(l.x / texel) * texel; l.y = Math.round(l.y / texel) * texel;
+    const snapped = l.applyQuaternion(q);
+    this.sun.target.position.copy(snapped);
+    this.sun.position.copy(snapped).addScaledVector(this.sunDir, 80);
+    this.sun.target.updateMatrixWorld();
   }
 
   private pushOut(p: THREE.Vector3, c: THREE.Vector3, r: number) {
@@ -454,7 +481,7 @@ void main() {
     for (const s of this.strays) { const d = s.pet.root.position.distanceTo(this.pos); if (d < bd) { bd = d; best = s; } }
     let bc: Companion | null = null;
     if (!best) for (const c of [this.companion, ...this.homePets]) if (c) { const d = c.pet.root.position.distanceTo(this.pos); if (d < 2.4 && d < bd) { bd = d; bc = c; } }
-    const nf = this.pos.distanceTo(this.world.fountain) < 2.6;
+    const nf = this.world.fountains.some(f => f.distanceTo(this.pos) < 3.2);
     const changed = best !== this.near || bc !== this.nearCompanion || nf !== this.nearFountain;
     this.near = best; this.nearCompanion = bc; this.nearFountain = nf;
     const target = best?.pet ?? bc?.pet;
@@ -474,7 +501,7 @@ void main() {
     const sp = speed * Math.min(1, l / 0.8 + 0.3) * (Math.abs(dy) > 1.2 ? 0.4 : 1);
     const before = p.root.position.clone();
     p.root.position.addScaledVector(new THREE.Vector3(Math.sin(yawRef.yaw), 0, Math.cos(yawRef.yaw)), sp * dt);
-    collide(p.root.position, 0.25, this.world.colliders, this.world.bounds);
+    collide(p.root.position, 0.25, this.world.colliders, this.world.bounds, this.world.lands, before);
     this.pushOut(p.root.position, this.pos, 0.55);
     const real = p.root.position.distanceTo(before) / dt;
     p.speed += (real - p.speed) * Math.min(1, dt * 8);
@@ -488,7 +515,7 @@ void main() {
       const p = s.pet; s.t -= dt;
       const dPlayer = p.root.position.distanceTo(this.pos);
       const hungry = s.hungryAt <= tnow;
-      if (dPlayer > 45) { p.root.visible = false; continue; } // uzaktakileri çizme
+      if (dPlayer > 110) { p.root.visible = false; continue; } // sis ötesindekileri hiç güncelleme
       p.root.visible = true;
       p.lookYaw = 0;
       switch (s.mode) {
@@ -648,7 +675,7 @@ void main() {
     const p = this.pos.clone().add(new THREE.Vector3(Math.sin(this.yaw) * 2.4, 0, Math.cos(this.yaw) * 2.4));
     pl.ghost.position.copy(p); pl.ghost.rotation.y = pl.rot;
     const others = this.state.houses.filter(h => h.city === this.state.city).some(h => Math.hypot(h.x - p.x, h.z - p.z) < 1.6);
-    pl.valid = !blocked(p.x, p.z, 0.75, this.world.colliders) && !others && p.z > this.world.bounds.z0 + 0.8;
+    pl.valid = !blocked(p.x, p.z, 0.75, this.world.colliders) && !others && onLand(p.x, p.z, this.world.lands);
     pl.ghost.traverse(o => { const m = (o as THREE.Mesh).material as THREE.MeshLambertMaterial; if (m && m.emissive) m.emissive.set(pl.valid ? '#1f5f2a' : '#7a1414'); });
   }
 

@@ -165,7 +165,7 @@ export class Hud {
       html = this.tabs('map', [['hood', 'Mahalle'], ['cities', 'Şehirler']]);
       if (this.tab.map === 'hood') {
         const hungry = this.game.strays.filter(x => x.hungryAt <= Date.now()).length;
-        html += `<div class="mapwrap"><canvas id="minimap" width="560" height="460"></canvas><div class="legend"><span><i class="dot me"></i>Sen</span><span><i class="dot hungry"></i>Aç dost (${hungry})</span><span><i class="dot ok"></i>Tok dost</span><span><i class="dot fnt"></i>Çeşme</span></div></div>`;
+        html += `<div class="mapwrap"><canvas id="minimap" width="520" height="858"></canvas><div class="legend"><span><i class="dot me"></i>Sen</span><span><i class="dot hungry"></i>Aç dost (${hungry})</span><span><i class="dot ok"></i>Tok dost</span><span><i class="dot fnt"></i>Çeşme</span></div></div>`;
       } else {
         html += `<div class="grid cities">${CITIES.map(c => {
           const here = s.city === c.id, unlocked = s.unlockedCities.includes(c.id);
@@ -289,30 +289,30 @@ export class Hud {
     const c = document.getElementById('minimap') as HTMLCanvasElement | null; if (!c) return;
     const g = c.getContext('2d')!; const w = this.game.world;
     const b = w.bounds, W = c.width, H = c.height;
-    const sx = W / (b.x1 - b.x0 + 4), sz = H / (b.z1 - b.z0 + 6);
-    const sc = Math.min(sx, sz);
-    const ox = W / 2 - ((b.x0 + b.x1) / 2) * sc, oz = H / 2 - ((b.z0 + b.z1) / 2) * sc + 6;
+    const sc = Math.min(W / (b.x1 - b.x0), H / (b.z1 - b.z0));
+    const ox = W / 2 - ((b.x0 + b.x1) / 2) * sc, oz = H / 2 - ((b.z0 + b.z1) / 2) * sc;
     const X = (x: number) => ox + x * sc, Z = (z: number) => oz + z * sc;
+    const fillR = (o: { x: number; z: number; hw: number; hd: number }) => g.fillRect(X(o.x - o.hw), Z(o.z - o.hd), o.hw * 2 * sc, o.hd * 2 * sc);
     g.fillStyle = '#4aa3c7'; g.fillRect(0, 0, W, H);
-    g.fillStyle = '#e8dccb'; g.fillRect(X(b.x0 - 1), Z(b.z0 - 0.8), (b.x1 - b.x0 + 2) * sc, (b.z1 - b.z0 + 1.5) * sc);
-    g.fillStyle = '#d6c6b0'; for (const o of w.open) g.fillRect(X(o.x - o.hw), Z(o.z - o.hd), o.hw * 2 * sc, o.hd * 2 * sc);
-    g.fillStyle = '#e8a68a'; for (const l of w.lots) { g.beginPath(); (g as any).roundRect(X(l.x - l.hw) + 0.6, Z(l.z - l.hd) + 0.6, l.hw * 2 * sc - 1.2, l.hd * 2 * sc - 1.2, 2); g.fill(); }
-    // çeşme
-    g.fillStyle = '#3b8ed6'; g.beginPath(); g.arc(X(w.fountain.x), Z(w.fountain.z), 6, 0, 7); g.fill();
-    // kulübeler
-    for (const h of this.game.state.houses.filter(h => h.city === this.game.state.city)) { g.fillStyle = h.color; g.fillRect(X(h.x) - 4, Z(h.z) - 4, 8, 8); }
+    g.fillStyle = '#efe4d2'; for (const l of w.lands) g.fillRect(X(l.x0), Z(l.z0), (l.x1 - l.x0) * sc, (l.z1 - l.z0) * sc);
+    g.fillStyle = '#e2d4bf'; for (const o of w.open) fillR(o);
+    g.fillStyle = '#9fcf86'; for (const o of w.parks) fillR(o);
+    g.fillStyle = '#e3a589'; for (const l of w.lots) fillR(l);
+    g.fillStyle = '#3b8ed6'; for (const f of w.fountains) { g.beginPath(); g.arc(X(f.x), Z(f.z), 4, 0, 7); g.fill(); }
+    for (const h of this.game.state.houses.filter(h => h.city === this.game.state.city)) { g.fillStyle = h.color; g.fillRect(X(h.x) - 3, Z(h.z) - 3, 6, 6); }
+    g.font = '700 11px Baloo2, sans-serif'; g.textAlign = 'center';
+    for (const m of w.landmarks) { g.fillStyle = 'rgba(58,42,34,.75)'; g.fillText(m.name, X(m.x), Z(m.z) - 4); }
     const n = Date.now();
-    for (const s of this.game.strays) {
-      const p = s.pet.root.position, hungry = s.hungryAt <= n;
-      g.fillStyle = hungry ? '#e2493b' : '#5aa055'; g.strokeStyle = '#fff'; g.lineWidth = 2;
-      g.beginPath(); g.arc(X(p.x), Z(p.z), hungry ? 6 : 4.5, 0, 7); g.fill(); g.stroke();
+    for (const st of this.game.strays) {
+      const p = st.pet.root.position, hungry = st.hungryAt <= n;
+      g.fillStyle = hungry ? '#e2493b' : '#5aa055'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
+      g.beginPath(); g.arc(X(p.x), Z(p.z), hungry ? 4 : 3, 0, 7); g.fill(); g.stroke();
     }
-    // oyuncu (yön oklu)
     const p = this.game.pos, yaw = this.game.yaw;
     g.save(); g.translate(X(p.x), Z(p.z)); g.rotate(-yaw + Math.PI);
-    g.fillStyle = '#f2c94c'; g.strokeStyle = '#2b211c'; g.lineWidth = 2.5;
-    g.beginPath(); g.moveTo(0, -11); g.lineTo(8, 8); g.lineTo(0, 4); g.lineTo(-8, 8); g.closePath(); g.fill(); g.stroke(); g.restore();
-    g.fillStyle = '#ffffffcc'; g.font = '700 15px Baloo2, sans-serif'; g.fillText('BOĞAZ', X(-6), Z(b.z0 - 0.2) - 6 > 14 ? Z(b.z0) - 8 : 16);
+    g.fillStyle = '#f2c94c'; g.strokeStyle = '#2b211c'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 7); g.lineTo(0, 3); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
+    g.textAlign = 'start';
   }
 
   // ---------- akışlar ----------

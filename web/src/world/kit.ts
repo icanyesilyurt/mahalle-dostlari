@@ -123,9 +123,13 @@ export class Batch {
     }
     g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(a)) g.deleteAttribute(a);
-    // 20 m'lik karolara böl: ekran/gölge dışındaki karolar hiç çizilmez
+    this.push(key, g);
+  }
+
+  /** Hazır (renkli) geometriyi ekle; 48 m karolara bölünür (yalnız görüş alanı dışı karolar çizilmez). */
+  push(key: string, g: THREE.BufferGeometry) {
     g.computeBoundingBox(); const bb = g.boundingBox!;
-    const tk = this.tile ? `|${Math.floor((bb.min.x + bb.max.x) / 2 / 20)}|${Math.floor((bb.min.z + bb.max.z) / 2 / 20)}` : '';
+    const tk = this.tile ? `|${Math.floor((bb.min.x + bb.max.x) / 2 / 48)}|${Math.floor((bb.min.z + bb.max.z) / 2 / 48)}` : '';
     const k2 = key + tk;
     if (!this.parts.has(k2)) this.parts.set(k2, []);
     this.parts.get(k2)!.push(g);

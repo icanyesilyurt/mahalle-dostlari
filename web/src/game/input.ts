@@ -3,11 +3,12 @@ export interface InputState {
   move: { x: number; y: number };    // joystick (-1..1), y yukarı = ileri
   tap: { x: number; y: number } | null;
   yawDelta: number;
+  pitchDelta: number;
   zoomDelta: number;
 }
 
 export class Input {
-  state: InputState = { move: { x: 0, y: 0 }, tap: null, yawDelta: 0, zoomDelta: 0 };
+  state: InputState = { move: { x: 0, y: 0 }, tap: null, yawDelta: 0, pitchDelta: 0, zoomDelta: 0 };
   private keys = new Set<string>();
   private joyId: number | null = null;
   private joyO = { x: 0, y: 0 };
@@ -59,10 +60,10 @@ export class Input {
       return;
     }
     const p = this.pointers.get(e.pointerId); if (!p) return;
-    const dx = e.clientX - p.x;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (Math.hypot(p.x - p.sx, p.y - p.sy) > 12) p.moved = true;
-    if (this.pointers.size === 1 && p.moved) this.state.yawDelta += dx * 0.006;
+    if (this.pointers.size === 1 && p.moved) { this.state.yawDelta += dx * 0.006; this.state.pitchDelta += dy * 0.0025; }
     if (this.pointers.size === 2) { const d = this.dist(); this.state.zoomDelta -= (d - this.pinchD) * 0.004; this.pinchD = d; }
   }
 
@@ -91,6 +92,6 @@ export class Input {
     return this.state;
   }
 
-  consume() { this.state.tap = null; this.state.yawDelta = 0; this.state.zoomDelta = 0; }
+  consume() { this.state.tap = null; this.state.yawDelta = 0; this.state.pitchDelta = 0; this.state.zoomDelta = 0; }
   get running() { return this.keys.has('shift'); }
 }

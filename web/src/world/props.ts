@@ -22,7 +22,8 @@ export function tree(b: Batch, x: number, z: number, r: Rng, scale = 1, big = fa
   b.add('plain', new THREE.CylinderGeometry(0.7 * s, 0.7 * s, 0.1, 16), '#7a6250', M(x, 0.07, z));
 }
 
-export function lamp(b: Batch, x: number, z: number) {
+export function lamp(b: Batch, x: number, z: number, s = 1) {
+  if (s !== 1) { const sub = new Batch(b.mats); lamp(sub, 0, 0); for (const [k, list] of (sub as any).parts) for (const g of list) { g.applyMatrix4(M(x, 0, z, 0, s, s, s)); (b as any).push(k, g); } return; }
   b.add('plain', new THREE.CylinderGeometry(0.12, 0.16, 0.3, 8), '#2f3235', M(x, 0.15, z));
   b.add('plain', new THREE.CylinderGeometry(0.06, 0.07, 3.0, 8), '#2f3235', M(x, 1.6, z));
   b.add('plain', new THREE.CylinderGeometry(0.22, 0.12, 0.12, 8), '#2f3235', M(x, 3.1, z));
