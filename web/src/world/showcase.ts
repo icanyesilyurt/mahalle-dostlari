@@ -3,18 +3,22 @@
 // Binalar Kenney "Modular Buildings" parçalarından, evin eni/derinliği/kat sayısına göre birleştirilir.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Instancer, Kits, wallTint } from './assets';
+import { Instancer, Kits, Tile, wallTint } from './assets';
 import { M, rng } from './kit';
 import type { NpcSpawn, Rect, StraySpawn } from './world';
 
 /** Vitrin bölgesi (dünya koordinatı). */
-export const SHOWCASE = { x0: -60, x1: 190, z0: 128, z1: 300 };
+export const SHOWCASE = { x0: -1e4, x1: 1e4, z0: -1e4, z1: 1e4 };   // artık tüm harita
 export const inShowcase = (x: number, z: number) => x >= SHOWCASE.x0 && x <= SHOWCASE.x1 && z >= SHOWCASE.z0 && z <= SHOWCASE.z1;
 /** Sultan Ahmet Camii + avlusu ve meydan çeşmesinin eski ilkel şekilleri bu kutulardan atılır. */
 export const REPLACED_PRIMS = [
   { x0: -47, x1: 22, z0: 232, z1: 279 },   // cami + avlu + 4 minare
   { x0: 33, x1: 51, z0: 213, z1: 231 },    // meydan çeşmesi
   { x0: 62, x1: 114, z0: 160, z1: 212 },   // Ayasofya + 4 minare
+  { x0: -27, x1: 7, z0: 17, z1: 49 },      // Yeni Cami
+  { x0: -122, x1: -61, z0: 18, z1: 44 },   // Mısır Çarşısı
+  { x0: 37, x1: 53, z0: -210, z1: -195 },  // Galata Kulesi
+  { x0: -8.5, x1: 8.5, z0: -50.5, z1: 0.5 }, // Galata Köprüsü
 ];
 export const primReplaced = (x: number, z: number) => REPLACED_PRIMS.some(b => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
 
@@ -80,12 +84,22 @@ function tileRoof(w: number, d: number, h: number, tile = 1.6): THREE.BufferGeom
   return g;
 }
 
+/** Karo-bazlı birleşik geometri: her 96 m'lik karo ayrı mesh (görüş dışı karolar çizilmez). */
+class TMerge {
+  private tiles = new Map<string, Merge>();
+  add(g: THREE.BufferGeometry, color: THREE.ColorRepresentation, m: THREE.Matrix4) {
+    const k = Math.floor(m.elements[12] / 96) + ',' + Math.floor(m.elements[14] / 96);
+    let t = this.tiles.get(k); if (!t) this.tiles.set(k, t = new Merge()); t.add(g, color, m);
+  }
+  meshes(mat: THREE.Material, shadows: boolean) { const g = new THREE.Group(); for (const t of this.tiles.values()) g.add(t.mesh(mat, shadows)); return g; }
+}
+
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const sbox = (mg: Merge, base: THREE.Matrix4, c: THREE.ColorRepresentation, w: number, h: number, d: number, x: number, y: number, z: number, rx = 0) =>
+const sbox = (mg: Merge | TMerge, base: THREE.Matrix4, c: THREE.ColorRepresentation, w: number, h: number, d: number, x: number, y: number, z: number, rx = 0) =>
   mg.add(BOX, c, new THREE.Matrix4().multiplyMatrices(base, M(x, y + h / 2, z, 0, w, h, d, rx)));
 
 export interface ShowcaseOut {
-  group: THREE.Group; colliders: Rect[]; fountainR: number;
+  group: THREE.Group; colliders: Rect[]; fountainR: number; tiles: Tile[];
   spawn: THREE.Vector3; spawnYaw: number;
   strays: StraySpawn[]; npcs: NpcSpawn[];
   walkers: [number, number][][];      // gezinen NPC'lerin dönüş yolları
@@ -95,7 +109,7 @@ export interface ShowcaseOut {
 export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut {
   const R = rng(4242);
   const I = new Instancer(kits);
-  const trims = new Merge(), roofs = new Merge();
+  const trims = new TMerge(), roofs = new TMerge();
   const colliders: Rect[] = [];
   const at = (base: THREE.Matrix4, m: THREE.Matrix4) => new THREE.Matrix4().multiplyMatrices(base, m);
 
@@ -110,26 +124,33 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
     const base = M(cx, 0, cz, ry);
     const gf = 3.4, fh = 3.0, H = gf + (floors - 1) * fh;
     const nx = Math.max(1, Math.round(w / 3.1)), mw = w / nx, sz = d / 2;
-    const fam = UPPER[R.int(0, UPPER.length - 1)];
+    const fam = R.pick(['pen_2', 'pen_4', 'pen_6', 'pen_4', 'pen_kemer']);
+    const kep = R.chance(0.5) ? 'yesil' : 'kahve', kepP = wood ? 0.55 : R.range(0.1, 0.4), saksiP = R.range(0.05, 0.2);
+    const pickWin = () => R.chance(kepP) ? `pen_kepenk_${kep}_${R.chance(0.65) ? 'acik' : 'kapali'}` : R.chance(saksiP) ? 'pen_saksi' : fam;
     const doorI = R.int(0, nx - 1), door = R.pick(DOORS);
     const balcony = !wood && floors >= 2 && nx >= 2 && R.chance(0.4);
     const balI = Math.floor(nx / 2);
     const cumba = floors >= 3 && w >= 5 && !balcony && R.chance(wood ? 0.7 : 0.35);
+    const cw = Math.min(3.3, w - 1.4);
     for (let f = 0; f < floors; f++) {
       const y = f === 0 ? 0 : gf + (f - 1) * fh, hh = f === 0 ? gf : fh, sy = hh / 0.63;
       for (let i = 0; i < nx; i++) {
         const x = -w / 2 + mw * (i + 0.5);
-        let front: string;
+        let front: string | null = null, win: string | null = null;
         if (f === 0) {
           if (shop) front = nx >= 3 ? (i === 0 ? 'building-window-large-left' : i === nx - 1 ? 'building-window-large-right' : 'building-window-large-middle') : 'building-window-large';
-          else front = i === doorI ? door : R.chance(0.5) ? 'building-window-sill' : 'building-windows-sills';
-        } else if (balcony && i === balI) front = 'building-window-balcony';
-        else front = fam[(i + f) % fam.length];
-        I.add(front, at(base, M(x, y, -d / 2 + sz / 2, Math.PI, mw, sy, sz)), tint);
-        I.add(f === 0 ? 'building-window' : 'building-windows', at(base, M(x, y, d / 2 - sz / 2, 0, mw, sy, sz)), tint);
+          else if (i === doorI) front = door;
+          else win = pickWin();
+        } else if (balcony && i === balI) win = 'balkon';
+        else if (!(cumba && Math.abs(x) < cw / 2 + 0.3)) win = pickWin();
+        if (front) I.add(front, at(base, M(x, y, -d / 2 + sz / 2 - 0.04, Math.PI, mw * 0.996, sy, sz)), tint);
+        if (win) I.add(win, at(base, M(x, y + (win === 'balkon' ? 0.02 : f === 0 ? 1.0 : 0.85), -d / 2, Math.PI)), '#ffffff', 'pen_lod');
+        // arka cephe: basit pencere (gövde tek blok)
+        I.add('pen_lod', at(base, M(x, y + (f === 0 ? 1.0 : 0.85), d / 2, 0)));
       }
       if (f > 0) sbox(trims, base, trim, w + 0.12, 0.16, d + 0.12, 0, y - 0.08, 0);   // kat silmesi
     }
+    I.add('building-block', at(base, M(0, 0, 0, 0, w, H / 0.63, d)), tint);           // gövde: tek blok
     sbox(trims, base, '#b9ab98', w + 0.1, 0.4, d + 0.1, 0, 0, 0);                  // taş subasman
     sbox(trims, base, trim, w + 0.36, 0.28, d + 0.36, 0, H, 0);                     // saçak silmesi
     roofs.add(tileRoof(w + 0.9, d + 0.9, R.range(1.2, 1.8)), R.pick(ROOF), at(base, M(0, H + 0.28, 0)));
@@ -145,14 +166,10 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
       else { I.add('pot_large', at(base, M(dx, 0.1, -d / 2 - 0.35, 0, 1.9, 1.9, 1.9))); I.add(R.pick(['flower_redA', 'flower_yellowA', 'flower_purpleA']), at(base, M(dx, 0.3, -d / 2 - 0.35, R.range(0, 6), 3, 3, 3))); }
     }
     if (cumba) {
-      const cw = Math.min(3.3, w - 1.4);
       for (let f = 1; f < floors; f++) I.add('cumba', at(base, M(0, gf + (f - 1) * fh, -d / 2, Math.PI, cw / 3, fh / 3, 1)), tint);
       I.add('cumba_alt', at(base, M(0, gf, -d / 2, Math.PI, cw / 3, 1, 1)));
       I.add('cumba_ust', at(base, M(0, H, -d / 2, Math.PI, cw / 3, 1, 1)));
     }
-    // pencere önünde çiçek (balkonlu katlarda)
-    if (balcony) for (let f = 1; f < floors; f++) if (R.chance(0.6))
-      I.add(R.pick(['flower_redA', 'flower_yellowA', 'plant_bush']), at(base, M(-w / 2 + mw * (balI + 0.5) + R.range(-0.6, 0.6), gf + (f - 1) * fh + 0.1, -d / 2 - 0.12, R.range(0, 6), 2.4, 2.4, 2.4)));
   };
   for (const h of houses) house(h);
 
@@ -162,9 +179,12 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
     if (!inShowcase(x, z)) continue;
     const n = Math.max(1, Math.round(ww / 7.4)), sw = ww / n, fl = Math.max(2, Math.round((hh - 0.4) / 3));
     const c = Math.cos(ry), s = Math.sin(ry);
+    // ön cephe yola bakan taraf olsun: iki yönden hangisinin önü yol ise
+    const onRoad = (t: number) => { const px = x - Math.sin(t) * (dd / 2 + 2.5), pz = z - Math.cos(t) * (dd / 2 + 2.5); return (D.roads as any[][]).some(r => px >= r[1] && px <= r[2] && pz >= r[3] && pz <= r[4]); };
+    const fry = onRoad(ry + Math.PI) || !onRoad(ry) ? ry + Math.PI : ry;
     for (let i = 0; i < n; i++) {
       const lx = -ww / 2 + sw * (i + 0.5);
-      house([x + lx * c, z - lx * s, sw - 0.05, dd, ry + Math.PI, fl + (R.chance(0.35) ? 1 : 0), R.chance(0.65) ? 1 : 0, 'siva', R.pick(PAL), 'win_a']);
+      house([x + lx * c, z - lx * s, sw - 0.05, dd, fry, fl + (R.chance(0.35) ? 1 : 0), R.chance(0.65) ? 1 : 0, 'siva', R.pick(PAL), 'win_a']);
     }
   }
 
@@ -188,6 +208,10 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   I.add('cami', M(-2, 0, 255), stone);
   I.add('cami_avlu', M(-32.25, 0, 255), stone);
   I.add('ayasofya', M(88, 0, 186), wallTint('#d6a690'));
+  I.add('yeni_cami', M(-10, 0, 34, 0, 0.77, 0.77, 0.77), stone);
+  I.add('misir_carsisi', M(-91.5, 0, 31), wallTint('#e9d2b0'));
+  I.add('galata_kulesi', M(45, 0, -202.5, 0, 1.2, 0.82, 1.2), wallTint('#e3cfae'));
+  for (let k = 0; k < 5; k++) I.add('kopru', M(0, 0, -45 + k * 10, 0, 0.875, 1, 1));
 
   // ---------- meydan çeşmesi (eski havuzun yerinde) ----------
   const [fx, fz] = D.fountains[0] as number[];
@@ -208,9 +232,9 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   for (const [x, z] of [[104.5, 218.5], [104.5, 225.5], [100, 222]]) { I.add('cay_masa', M(x, 0, z, R.range(0, 6))); colliders.push({ x, z, hw: 0.45, hd: 0.45 }); }
 
   const g = new THREE.Group();
-  g.add(trims.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), shadows));
+  g.add(trims.meshes(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), shadows));
   const [kc, kn] = kits.tex.kiremit;
-  g.add(roofs.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, map: kc, normalMap: kn, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.8 }), shadows));
+  g.add(roofs.meshes(new THREE.MeshStandardMaterial({ vertexColors: true, map: kc, normalMap: kn, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.8 }), shadows));
   g.add(curbs(D));
 
   // ---------- meydan düzeni: yürüme yolları, çeşme çevresi, çimen adacıkları ----------
@@ -248,9 +272,18 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   const pigeons: [number, number][] = [];
   for (let i = 0; i < 16; i++) { const a = R.range(0, 6.28), r = R.range(5.2, 9); pigeons.push([fcx + Math.cos(a) * r, fcz + Math.sin(a) * r]); }
   for (let i = 0; i < 6; i++) pigeons.push([R.range(104, 116), R.range(141.2, 143.8)]);
+  for (const [x, z] of (D.fountains as number[][]).slice(1)) for (let i = 0; i < 8; i++) { const a = R.range(0, 6.28), r = R.range(3.5, 7); pigeons.push([x + Math.cos(a) * r, z + Math.sin(a) * r]); }
+  // her ikinci uzun sokakta bir gezinen (sokak ortasında 30-70 m gidip gelir)
+  (D.roads as any[][]).forEach(([, x0, x1, z0, z1], k) => {
+    const w = x1 - x0, dd = z1 - z0, L = Math.max(w, dd);
+    if (L < 40 || k % 2 || walkers.length >= 26) return;
+    const seg = Math.min(L - 8, 30 + (k % 5) * 10), c0 = R.range(-(L - 8 - seg) / 2, (L - 8 - seg) / 2);
+    if (w > dd) { const cx = (x0 + x1) / 2 + c0, cz = (z0 + z1) / 2 + R.range(-1, 1); walkers.push([[cx - seg / 2, cz - 0.7], [cx + seg / 2, cz - 0.7], [cx + seg / 2, cz + 0.7], [cx - seg / 2, cz + 0.7]]); }
+    else { const cz = (z0 + z1) / 2 + c0, cx = (x0 + x1) / 2 + R.range(-1, 1); walkers.push([[cx - 0.7, cz - seg / 2], [cx - 0.7, cz + seg / 2], [cx + 0.7, cz + seg / 2], [cx + 0.7, cz - seg / 2]]); }
+  });
 
-  g.add(I.build(shadows));
-  return { group: g, colliders, fountainR: 4.6, spawn: new THREE.Vector3(120, 0, 142.2), spawnYaw: -Math.PI / 2, strays, npcs, walkers, pigeons };
+  const built = I.build(shadows); g.add(built.group);
+  return { group: g, colliders, fountainR: 4.6, tiles: built.tiles, spawn: new THREE.Vector3(120, 0, 142.2), spawnYaw: -Math.PI / 2, strays, npcs, walkers, pigeons };
 }
 
 /** Kaldırım kenar taşı: kaldırım/meydan döşemesinin yola (arnavut kaldırımı) değdiği kenarlarda. */

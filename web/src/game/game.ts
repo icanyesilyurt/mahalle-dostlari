@@ -11,6 +11,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { setMultiDraw } from '../world/assets';
 import { CITY_BUILDERS, WorldData, blocked, collide, getKits, makeMaterials, onLand } from '../world/world';
 import { haptic, sfx } from '../ui/sfx';
 import { Input } from './input';
@@ -48,6 +49,8 @@ export class Game {
   camPitch = 0.21;       // aşağı bakış açısı (rad), 5°–20°
   camDist = 4.6;         // oyuncu ile kamera arası (m), 3–7
   private armDist = 4.6; // duvara çarpınca kısalan gerçek mesafe
+  private wallK = 0;      // kamera bir duvara bakıyorsa 0..1
+  private side = 0;       // omuz kayması (m)
   private manualT = 0;
   private camTarget = new THREE.Vector3();
   private sky!: THREE.Mesh;
@@ -88,6 +91,7 @@ export class Game {
     this.renderer.toneMappingExposure = 1.12;
     this.labelsEl = document.getElementById('labels')!;
     this.setupScene();
+    setMultiDraw(!!this.renderer.extensions.has('WEBGL_multi_draw'));
     this.loadCity(state.city);
     if (getKits()) this.setupPost();
     addEventListener('resize', () => this.resize());
@@ -372,7 +376,7 @@ export class Game {
     if (this.composer) { const s = this.renderer.getDrawingBufferSize(new THREE.Vector2()); this.composer.setSize(w, h); this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.gtao?.setSize(s.x, s.y); }
     this.camera.aspect = w / h;
     this.camera.fov = w < h ? 68 : 57;
-    this.camera.near = 0.3; this.camera.far = 320;
+    this.camera.near = 0.3; this.camera.far = 275;
     this.camera.updateProjectionMatrix();
   }
 
@@ -384,6 +388,17 @@ export class Game {
       this.draw();
     };
     loop();
+  }
+
+  /** Karo LOD: kameraya ~75 m'den yakın karolarda ayrıntılı pencereler, uzakta basit olanlar (sis içinde, fark edilmez). */
+  private updateTiles() {
+    const T = this.world.tiles; if (!T) return;
+    const c = this.camera.position;
+    for (const k of T) {
+      const dx = Math.max(0, Math.abs(c.x - k.cx) - k.half), dz = Math.max(0, Math.abs(c.z - k.cz) - k.half);
+      const d = Math.hypot(dx, dz), near = k.near ? d < 85 : d < 75;
+      if (near !== k.near) { k.near = near; k.detail.visible = near; k.lod.visible = !near; }
+    }
   }
 
   private updateWalkers(dt: number) {
@@ -451,7 +466,7 @@ export class Game {
     let wish = new THREE.Vector3();
     if (mag > 0.08) {
       this.tapTarget = null; this.tapStray = null; this.marker.visible = false;
-      const fwd = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
+      const fwd = new THREE.Vector3(Math.sin(this.camYaw + this.side), 0, Math.cos(this.camYaw + this.side));
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       wish.addScaledVector(fwd, my).addScaledVector(right, mx).normalize();
       mag = Math.min(1, mag);
@@ -483,6 +498,7 @@ export class Game {
     this.player.update(dt);
     for (const n of this.npcs) n.update(dt);
     this.updateWalkers(dt);
+    this.updateTiles();
     this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
@@ -507,15 +523,27 @@ export class Game {
       this.camYaw += dy * Math.min(1, dt * 2.4);
     }
     this.camTarget.lerp(this.pos, Math.min(1, dt * 10));
-    const fwd = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     const pivot = this.camTarget.clone().add(new THREE.Vector3(0, 1.5, 0));
+    // duvar dibi: kameranın baktığı yönde yakın bir duvar varsa ekranın yarısı düz yüzey olmasın diye
+    // görüş duvar boyunca açık tarafa döner (omuzdan bakış), kamera biraz yükselir ve aşağı bakar
+    const base = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
+    const ahead = this.armFree(pivot, base, 8);
+    const wT = THREE.MathUtils.clamp((4.8 - ahead) / 3.6, 0, 1);
+    this.wallK += (wT - this.wallK) * Math.min(1, dt * 3);
+    const rgt = new THREE.Vector3(-base.z, 0, base.x);
+    const fr = this.armFree(pivot, rgt, 12), fl = this.armFree(pivot, rgt.clone().negate(), 12);
+    const offT = this.wallK > 0.02 ? (fr >= fl ? -1 : 1) * 1.15 * this.wallK : 0;
+    this.side += (offT - this.side) * Math.min(1, dt * 2.5);
+    const vy = this.camYaw + this.side;
+    const fwd = new THREE.Vector3(Math.sin(vy), 0, Math.cos(vy));
     // yay kolu: araya bina girerse kamera karaktere yaklaşır, duvardan geçmez
     const want = this.camDist;
     const free = this.armFree(pivot, fwd.clone().negate(), want + 0.4) - 0.4;
     const armT = Math.max(1.0, Math.min(want, free));
     this.armDist += (armT - this.armDist) * Math.min(1, dt * (armT < this.armDist ? 18 : 3));
-    const cp = Math.cos(this.camPitch), spch = Math.sin(this.camPitch);
-    const lift = Math.max(0, 2.4 - this.armDist) * 0.7; // çok yaklaşınca kafanın üstünden baksın
+    const pitch = this.camPitch + this.wallK * 0.22;
+    const cp = Math.cos(pitch), spch = Math.sin(pitch);
+    const lift = Math.max(0, 2.4 - this.armDist) * 0.7 + this.wallK * 1.0; // çok yaklaşınca / duvara bakınca yüksel
     this.camera.position.copy(pivot).addScaledVector(fwd, -this.armDist * cp).add(new THREE.Vector3(0, this.armDist * spch + lift, 0));
     this.camera.lookAt(this.camera.position.clone().add(new THREE.Vector3(fwd.x * cp, -spch, fwd.z * cp)));
     this.sky.position.copy(this.camera.position);

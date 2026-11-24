@@ -168,6 +168,10 @@ function strayLook(a: any[]): StraySpawn {
 export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: boolean, kits?: Kits | null): WorldData {
   const R = rng(2027);
   const root = new THREE.Group();
+  if (kits) { // kalan ilkel şekiller (meydan süsleri, surlar, tramvay vb.) aynı düz-gölgeli low-poly malzemeyle
+    const flat = (o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, ...o });
+    mats = { ...mats, plain: flat(), roof: flat(), plaster: flat(), wood: flat(), leaf: flat(), far: flat(), gold: flat({ roughness: 0.35, metalness: 0.55 }) };
+  }
   const b = new Batch(mats, { plaster: 3, wood: 1.2, roof: -1.4 });
   b.tile = true;
 
@@ -188,6 +192,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
         groundMats.set(mk, new THREE.MeshStandardMaterial({ map: cc, normalMap: nn, normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.95, color: tint, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }) as any);
       }
     }
+    if (!groundMats.has(mk) && kits) groundMats.set(mk, new THREE.MeshStandardMaterial({ color: key === 'grass' ? '#9ccc6e' : key === 'wood' ? '#b98a5e' : '#' + col, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }) as any);
     if (!groundMats.has(mk)) {
       const t = (texFor[key] ?? TEX.slab)(); t.repeat.set(1 / (tileFor[key] ?? 4), 1 / (tileFor[key] ?? 4));
       groundMats.set(mk, new THREE.MeshLambertMaterial({ map: t, color: '#' + col, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }));
@@ -211,6 +216,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   const keyMap: Record<string, string> = { plain: 'plain', roof: 'roof', gold: 'gold', stonewall: 'plaster' };
   for (const [name, x, y, z, col, rx, ry, rz, sx, sy, sz, key] of D.prims as Prim[]) {
     if (kits && primReplaced(x, z)) continue;
+    if (kits && name.startsWith('cyl') && Math.abs(rx - 1.57) < 0.05 && sx > 4.5 && sx < 4.9) continue; // İstiklal pasaj kemeri: yeni cephelerin önünde dev disk gibi kalıyordu
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz));
     b.add(keyMap[key] ?? 'plain', prim(name), '#' + col, m);
   }
@@ -250,7 +256,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     lands: (D.lands as number[][]).concat([D.bridge, D.pier]).map(([x0, x1, z0, z1]) => ({ x0, x1, z0, z1 })),
     spawn: sc ? sc.spawn : new THREE.Vector3(start[0], 0, start[1]),
     spawnYaw: sc ? sc.spawnYaw : start[2],
-    walkers: sc?.walkers, pigeons: sc?.pigeons,
+    walkers: sc?.walkers, pigeons: sc?.pigeons, tiles: sc?.tiles,
     fountain: fountains[0], fountains, fountainR,
     strays: (D.animals as any[][]).filter(a => (a[6] ?? 0) < 0.5).map(strayLook).concat(sc?.strays ?? []),
     npcs: (D.vendors as number[][]).map(([x, z, ry]): NpcSpawn => ({ x, z, rot: ry, shirt: '#f4efe6', hat: 'kasket', role: 'Simitçi' })).concat(sc?.npcs ?? []),

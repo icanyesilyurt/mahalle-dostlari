@@ -22,12 +22,8 @@ const PACKS = {
   // Kenney Modular Buildings + Blender'da aynı atlasla modellenen İstanbul parçaları
   mb: {
     files: [
-      ...['building-block', 'building-window', 'building-windows', 'building-window-sill', 'building-windows-sills', 'building-window-wide',
-        'building-window-wide-sill', 'building-windows-round', 'building-windows-sills-round', 'building-window-balcony', 'building-window-awnings',
-        'building-door', 'building-door-window', 'building-door-window-narrow', 'building-window-door-window', 'building-window-door-window-round',
-        'building-window-large', 'building-window-large-left', 'building-window-large-middle', 'building-window-large-right',
-        'building-windows-high-top-round', 'building-windows-high-top-square', 'building-corner-window', 'building-corner-window-sill',
-        'roof-flat-top', 'roof-flat-awning-a', 'roof-flat-awning-b', 'roof-flat-awning-c', 'roof-flat-detail-a', 'roof-flat-detail-c', 'detail-ac-a', 'detail-ac-b',
+      ...['building-block', 'building-door', 'building-door-window', 'building-door-window-narrow', 'building-window-door-window', 'building-window-door-window-round',
+        'building-window-large', 'building-window-large-left', 'building-window-large-middle', 'building-window-large-right', 'detail-ac-a',
       ].map(n => [n, `${MB}/${n}.glb`]),
       ['@istanbul', `${SRC}/blender/istanbul-pieces.glb`],
     ],

@@ -11,7 +11,7 @@ async function boot() {
   const state = load(Date.now());
   const hud = new Hud();
   const input = new Input(document.getElementById('c')!, document.getElementById('joy')!);
-  if (import.meta.env.VITE_SHOWCASE) {
+  if (import.meta.env.VITE_SHOWCASE !== '0') { // yeni görünüm (hazır modeller) artık varsayılan
     msg.textContent = 'Sokaklar kuruluyor…';
     const { loadKits } = await import('./world/assets');
     setKits(await loadKits());

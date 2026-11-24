@@ -4,7 +4,7 @@ import { TEX } from './kit';
 import { facadeMaterials } from './facade';
 import type { BreedLook, Species } from '../core/catalog';
 import { buildIstanbul } from './istanbul';
-import type { Kits } from './assets';
+import type { Kits, Tile } from './assets';
 
 /** Hazır model paketleri (yalnız vitrin/test derlemesinde yüklenir). */
 let KITS: Kits | null = null;
@@ -30,6 +30,7 @@ export interface WorldData {
   fountains: THREE.Vector3[];
   fountainR?: number;
   walkers?: [number, number][][];
+  tiles?: Tile[];
   pigeons?: [number, number][];
   water: Rect[];
   parks: Rect[];

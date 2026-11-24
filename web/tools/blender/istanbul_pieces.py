@@ -61,6 +61,10 @@ def dome(sw, r, x=0, y=0, z=0, sz=1.0, seg=16, rings=6):
     o.scale = (1, 1, sz)
     return _done(o, sw)
 
+def ico(sw, r, x=0, y=0, z=0):
+    bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=r, location=(x, y, z))
+    return _done(bpy.context.object, sw)
+
 def ball(sw, r, x=0, y=0, z=0, seg=10):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=seg, ring_count=max(4, seg // 2), radius=r, location=(x, y, z))
     return _done(bpy.context.object, sw)
@@ -297,7 +301,7 @@ def minare_parts(x=0, y=0, H=44.0, serefe=3, r=0.72):
 assets.append(join('minare', minare_parts()))
 
 # ---------- SULTAN AHMET CAMİİ: kademeli kubbeler (merkez + 4 yarım + 8 eksedra + 4 köşe), 4 minare gövde köşesinde ----------
-def cami():
+def cami_body(minarets, name):
     p = []
     S = 34.5
     p.append(box('mavi_gri', S + 2, S + 2, 0.8, 0, 0, 0))
@@ -354,11 +358,12 @@ def cami():
     p.append(dome('gri', 11.6, 0, 0, 22.0, sz=0.82, seg=32, rings=10))
     p.append(cyl('sari', 0.12, 2.6, 0, 0, 31.4, n=6))
     p.append(ball('sari', 0.42, 0, 0, 33.4, seg=10)); p.append(ball('sari', 0.3, 0, 0, 34.2, seg=8))
-    # 4 minare (gövde köşelerinde; 3 şerefeli)
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            p += minare_parts(sx * 19.5, sy * 19.5, H=44.0, serefe=3)
-    return join('cami', p)
+    for mx, my in minarets:
+        p += minare_parts(mx, my, H=44.0, serefe=3)
+    return join(name, p)
+
+def cami():
+    return cami_body([(sx * 19.5, sy * 19.5) for sx in (-1, 1) for sy in (-1, 1)], 'cami')
 
 assets.append(cami())
 
@@ -490,6 +495,153 @@ def galata():
     return join('galata_kulesi', p)
 
 assets.append(galata())
+
+# ---------- PENCERE TAKIMI: taş söve + beyaz çerçeve + kayıtlar (2/4/6 bölme) + koyu cam; kepenk, saksı, balkon ----------
+# Köken: pencerenin alt-orta noktası, duvar yüzü (Blender y=0); her şey duvarın önünde (-Y = glTF +Z).
+# Cam = 'cam' karesi: oyundaki shader koyu lacivert-yeşil + hafif yansıma yapar.
+SW['cam'] = (336, 320)
+PW, PH = 1.0, 1.7
+
+def _f(sw, sx, sz, x, z, d0, d1):
+    """ön yüz düzleminde dikdörtgen kutu: x merkez, z alt, d0..d1 duvardan uzaklık (pozitif = dışarı)."""
+    return box(sw, sx, d1 - d0, sz, x, -(d0 + d1) / 2, z)
+
+def window_core(p, W=PW, H=PH, bars=(1, 1), arch=False):
+    p.append(_f('beyaz_g', W + 0.36, H + 0.34, 0, -0.17, 0.0, 0.05))            # söve
+    p.append(_f('cam', W, H, 0, 0, 0.05, 0.07))                              # cam
+    t = 0.07
+    for x in (-(W - t) / 2, (W - t) / 2): p.append(_f('beyaz', t, H, x, 0, 0.05, 0.12))
+    for z in (0, H - t): p.append(_f('beyaz', W, t, 0, z, 0.05, 0.12))
+    vx, hz = bars
+    for i in range(1, vx + 1): p.append(_f('beyaz', 0.045, H, -W / 2 + i * W / (vx + 1), 0, 0.05, 0.1))
+    for j in range(1, hz + 1): p.append(_f('beyaz', W, 0.045, 0, j * H / (hz + 1) + (0.12 if hz == 1 else 0), 0.05, 0.1))
+    p.append(_f('beyaz_g', W + 0.5, 0.1, 0, -0.12, 0.0, 0.22))                  # denizlik
+    if arch:
+        p.append(cyl('beyaz_g', (W + 0.36) / 2, 0.05, 0, -0.025, H, n=14, rx=math.pi / 2))
+        p.append(cyl('cam', W / 2, 0.02, 0, -0.06, H, n=14, rx=math.pi / 2))
+        p.append(_f('beyaz', 0.045, W / 2, 0, H, 0.05, 0.1))
+    else:
+        p.append(_f('beyaz_g', W + 0.5, 0.16, 0, H + 0.12, 0.0, 0.14))          # alınlık
+    return p
+
+def shutters(p, sw, open_, W=PW, H=PH):
+    sw2 = W / 2
+    for s in (-1, 1):
+        if open_:
+            cx, d0 = s * (W / 2 + 0.18 + sw2 / 2), 0.0
+        else:
+            cx, d0 = s * sw2 / 2, 0.12
+        p.append(_f(sw, sw2 - 0.03, H, cx, 0, d0, d0 + 0.04))
+        for k in range(4):                                                   # panjur çıtaları
+            p.append(_f(sw + '_k' if sw + '_k' in SW else sw, sw2 - 0.12, 0.05, cx, 0.2 + k * (H - 0.4) / 3, d0 + 0.04, d0 + 0.06))
+
+def flowerbox(p, W=PW):
+    p.append(_f('kiremit_k', W + 0.15, 0.24, 0, -0.02, 0.22, 0.5))
+    for i in range(4):
+        x = -W / 2 + 0.15 + i * (W - 0.3) / 3
+        p.append(ico('yesil' if i % 2 else 'yesil_k', 0.15, x, -0.36, 0.32))
+        p.append(ico(['kirmizi', 'mor', 'sari', 'kirmizi'][i], 0.08, x + 0.03, -0.44, 0.44))
+
+SW['kahve_k'] = SW['kahve_k']; SW['yesil_k'] = SW['yesil_k']
+for name, bars, extra in [
+    ('pen_2', (1, 0), None), ('pen_4', (1, 1), None), ('pen_6', (1, 2), None), ('pen_kemer', (1, 1), 'arch'),
+    ('pen_kepenk_yesil_acik', (1, 1), ('yesil', True)), ('pen_kepenk_kahve_acik', (1, 1), ('kahve', True)),
+    ('pen_kepenk_yesil_kapali', (1, 1), ('yesil', False)), ('pen_kepenk_kahve_kapali', (1, 1), ('kahve', False)),
+    ('pen_saksi', (1, 1), 'saksi'),
+]:
+    p = window_core([], bars=bars, arch=(extra == 'arch'))
+    if isinstance(extra, tuple): shutters(p, extra[0], extra[1])
+    if extra == 'saksi': flowerbox(p)
+    assets.append(join(name, p))
+
+# uzak mesafe (LOD): yalnız ön yüz — söve düzlemi + cam düzlemi + orta kayıt (6 üçgen)
+def quad(sw, w, h, x, z, d):
+    bpy.ops.mesh.primitive_plane_add(size=1, location=(x, -d, z + h / 2), rotation=(math.pi / 2, 0, 0))
+    o = bpy.context.object; o.scale = (w, h, 1)
+    return _done(o, sw)
+assets.append(join('pen_lod', [quad('beyaz_g', PW + 0.36, PH + 0.34, 0, -0.17, 0.02), quad('cam', PW, PH, 0, 0, 0.05), quad('beyaz', 0.06, PH, 0, 0, 0.06)]))
+
+def balkon():
+    p = []
+    W, H = 1.3, 2.35
+    p.append(_f('beyaz_g', W + 0.36, H + 0.3, 0, -0.02, 0.0, 0.05))
+    p.append(_f('cam', W, H, 0, 0, 0.05, 0.07))
+    for x in (-(W - 0.07) / 2, 0, (W - 0.07) / 2): p.append(_f('beyaz', 0.07, H, x, 0, 0.05, 0.12))
+    for z in (0.9, 1.6, H - 0.07): p.append(_f('beyaz', W, 0.05, 0, z, 0.05, 0.1))
+    p.append(_f('beyaz_g', 2.3, 0.14, 0, -0.14, 0.0, 0.95))                      # balkon döşemesi
+    for x in (-1.1, 1.1): p.append(_f('koyu', 0.05, 0.95, x, 0, 0.05, 0.1))  # yan korkuluk
+    p.append(_f('koyu', 2.25, 0.05, 0, 0.92, 0.88, 0.94))                    # küpeşte
+    for s in (-1, 1): p.append(box('koyu', 0.05, 0.85, 0.05, s * 1.1, -0.5, 0.92))
+    for i in range(14):                                                      # ferforje çubuklar
+        x = -1.05 + i * 2.1 / 13
+        p.append(_f('koyu', 0.025, 0.92, x, 0, 0.88, 0.91))
+    for i in range(6):                                                       # ferforje halkalar
+        p.append(torus('koyu', 0.09, 0.015, -0.9 + i * 0.36, -0.9, 0.5, rx=math.pi / 2, maj=10, mn=3))
+    for x in (-0.85, 0.85):                                                  # saksılar
+        p.append(cyl('kiremit_k', 0.13, 0.22, x, -0.65, 0, n=8))
+        p.append(ball('yesil', 0.16, x, -0.65, 0.32, seg=6)); p.append(ball('kirmizi', 0.07, x + 0.05, -0.7, 0.42, seg=6))
+    return join('balkon', p)
+
+assets.append(balkon())
+
+# ---------- YENİ CAMİ (Eminönü): Sultanahmet ile aynı dil, 2 minare (ön tarafta) ----------
+def yeni_cami():
+    o = cami_body(minarets=[(-19.5, 19.5), (19.5, 19.5)], name='yeni_cami')
+    return o
+
+assets.append(yeni_cami())
+
+# ---------- MISIR ÇARŞISI: 57.4 x 22.4 m uzun çarşı, iki yanda kemerli dükkânlar, çatıda kubbecik sıraları, uçlarda taç kapı ----------
+def misir():
+    p = []
+    L, W, H = 57.4, 22.4, 7.4
+    p.append(box('mavi_gri', L + 1, W + 1, 0.4, 0, 0, 0))
+    p.append(box('krem', L, W, H, 0, 0, 0.4))
+    p.append(box('krem_k', L + 0.4, W + 0.4, 0.45, 0, 0, H + 0.4))
+    for sy in (-1, 1):
+        for i in range(12):
+            x = -L / 2 + 2.6 + i * (L - 5.2) / 11
+            f = '+y' if sy > 0 else '-y'
+            p += arch_window('ten', 'koyu', 2.6, 3.0, x, sy * (W / 2 + 0.02), 0.4, face=f, depth=0.14)
+            p.append(box('kahve' if i % 3 else 'kirmizi', 2.4, 0.08, 0.5, x, sy * (W / 2 + 0.22), 3.3))     # dükkân tabelası
+            p += arch_window('ten', 'cam', 1.0, 1.4, x, sy * (W / 2 + 0.02), 4.9, face=f)
+    for sx in (-1, 1):                                                       # taç kapılar
+        p.append(box('krem', 3.0, 10.0, 10.5, sx * (L / 2 + 0.8), 0, 0))
+        p += arch_window('ten', 'koyu', 4.0, 6.2, sx * (L / 2 + 2.32), 0, 0.4, face='+x' if sx > 0 else '-x', depth=0.3)
+        p.append(dome('gri', 2.2, sx * (L / 2 + 0.8), 0, 10.5, sz=0.9, seg=12, rings=4))
+    for row in (-1, 1):                                                      # çatı kubbecikleri
+        for i in range(10):
+            x = -L / 2 + 3.5 + i * (L - 7) / 9
+            p.append(cyl('krem', 1.55, 0.6, x, row * 5.2, H + 0.8, n=12))
+            p.append(dome('gri', 1.6, x, row * 5.2, H + 1.4, sz=0.85, seg=12, rings=4))
+    for i in range(5):                                                       # orta sırt ve bacalar
+        p.append(box('ten', 0.6, 0.6, 1.4, -L / 2 + 6 + i * 11.5, 0, H + 0.8))
+    return join('misir_carsisi', p)
+
+assets.append(misir())
+
+# ---------- GALATA KÖPRÜSÜ parçası: 10 m (z boyunca), 16 m genişlik; döşeme üstü y=0 ----------
+def kopru():
+    p = []
+    Wd, L = 16.0, 10.0
+    p.append(box('mavi_gri', Wd, L, 0.7, 0, 0, -0.7))                        # döşeme
+    p.append(box('gri', 10.5, L, 0.02, 0, 0, 0.0))                           # asfalt
+    for s in (-1, 1):
+        p.append(box('beyaz_g', 2.6, L, 0.16, s * 6.6, 0, 0.0))              # yaya kaldırımı
+        p.append(box('koyu', 0.08, L, 0.08, s * 7.9, 0, 1.0))                # küpeşte
+        for k in range(8): p.append(box('koyu', 0.06, 0.06, 1.0, s * 7.9, -L / 2 + 0.6 + k * 1.25, 0.0))
+        p.append(box('koyu', 0.04, L, 0.04, s * 7.9, 0, 0.5))
+        # iki kollu fener
+        p.append(cyl('koyu', 0.1, 4.6, s * 7.6, 0, 0.0, n=8))
+        p.append(box('koyu', 1.2, 0.08, 0.08, s * 7.6, 0, 4.4))
+        for dx in (-0.55, 0.55):
+            p.append(cyl('beyaz', 0.14, 0.42, s * 7.6 + dx, 0, 4.0, n=8)); p.append(cyl('koyu', 0.16, 0.1, s * 7.6 + dx, 0, 4.42, n=8))
+    for s in (-1, 1):                                                        # ayaklar
+        p.append(cyl('krem_k', 1.1, 6.0, s * 5.0, 0, -6.7, n=10))
+    p.append(box('krem_k', 11.0, 1.4, 1.2, 0, 0, -1.9))
+    return join('kopru', p)
+
+assets.append(kopru())
 
 # ---------- dışa aktarım: her parça kendi düğümü, köken 0 ----------
 for o in assets:
