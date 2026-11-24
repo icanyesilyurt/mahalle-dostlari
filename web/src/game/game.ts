@@ -11,7 +11,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { setMultiDraw } from '../world/assets';
+import { setMultiDraw, wallTint } from '../world/assets';
 import { NIGHT, dayState, hourNow, skyMaterial } from './daycycle';
 import { VEHICLE_DEFS, Vehicle } from './vehicles';
 import { admit, ensureQuests, questProgress, DECOR } from '../core/care';
@@ -88,6 +88,7 @@ export class Game {
   private shelterGroup = new THREE.Group();
   private shelterPets: { pet: Pet; target: THREE.Vector3 | null; t: number; yaw: number }[] = [];
   private rideMeters = 0;
+  private trams: { mesh: THREE.InstancedMesh; pts: THREE.Vector3[]; len: number; s: number; dir: number; speed: number }[] = [];
   private walkers: { h: Human; path: THREE.Vector3[]; i: number; sp: number }[] = [];
   private pigeons: { im: THREE.InstancedMesh; b: { home: THREE.Vector3; p: THREE.Vector3; v: THREE.Vector3; yaw: number; air: number; t: number }[] } | null = null;
   private balls: Ball[] = [];
@@ -225,6 +226,7 @@ export class Game {
     for (const sp of this.world.strays) this.addStray(sp, R);
     this.spawnVehicle();
     this.scene.add(this.shelterGroup); this.refreshShelter();
+    this.makeTrams();
     ensureQuests(this.state, now());
     // kurulu kulübeler
     for (const h of this.state.houses.filter(h => h.city === id)) this.addHouseObj(h.uid);
@@ -525,6 +527,47 @@ export class Game {
     }
   }
 
+  // ---------- tramvay: raylarda yavaşça gidip gelir; önünde oyuncu/araç varsa durur, içinden geçilmez ----------
+  private makeTrams() {
+    const kits = getKits(); if (!kits || !this.world.trams) return;
+    const a = kits.get('tramvay');
+    for (const t of this.world.trams) {
+      const pts = t.path.map(([x, z]) => new THREE.Vector3(x, 0, z));
+      let len = 0; for (let i = 1; i < pts.length; i++) len += pts[i].distanceTo(pts[i - 1]);
+      const m = new THREE.InstancedMesh(a.geo, a.mat, 1); m.setMatrixAt(0, new THREE.Matrix4()); m.setColorAt(0, wallTint(t.color));
+      m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; this.scene.add(m);
+      this.trams.push({ mesh: m, pts, len, s: len * 0.3, dir: 1, speed: 0 });
+    }
+  }
+  private tramAt(t: { pts: THREE.Vector3[] }, s: number): [THREE.Vector3, number] {
+    let acc = 0;
+    for (let i = 1; i < t.pts.length; i++) {
+      const a = t.pts[i - 1], b = t.pts[i], l = a.distanceTo(b);
+      if (s <= acc + l || i === t.pts.length - 1) { const u = Math.min(1, Math.max(0, (s - acc) / l)); return [a.clone().lerp(b, u), Math.atan2(b.x - a.x, b.z - a.z)]; }
+      acc += l;
+    }
+    return [t.pts[0].clone(), 0];
+  }
+  private updateTrams(dt: number) {
+    for (const t of this.trams) {
+      const [p, yaw] = this.tramAt(t, t.s);
+      const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(t.dir);
+      // önünde oyuncu, araç ya da hayvan varsa dur (8 m)
+      const blockers = [this.pos, ...(this.vehicle ? [this.vehicle.root.position] : [])];
+      const blocked = blockers.some(b => { const d = b.clone().sub(p); const ahead = d.dot(fwd); const side = d.clone().addScaledVector(fwd, -ahead).length(); return ahead > 0 && ahead < 9 && side < 2.2; });
+      const want = blocked ? 0 : 3.2;
+      t.speed += (want - t.speed) * Math.min(1, dt * (blocked ? 4 : 0.6));
+      t.s += t.dir * t.speed * dt;
+      if (t.s > t.len - 4) { t.s = t.len - 4; t.dir = -1; t.speed = 0; }
+      if (t.s < 4) { t.s = 4; t.dir = 1; t.speed = 0; }
+      const [q, qy] = this.tramAt(t, t.s);
+      t.mesh.setMatrixAt(0, new THREE.Matrix4().compose(q, new THREE.Quaternion().setFromAxisAngle(UP, qy), new THREE.Vector3(1, 1, 1))); t.mesh.instanceMatrix.needsUpdate = true;
+      // oyuncu tramvayın içinden geçemez
+      const f2 = new THREE.Vector3(Math.sin(qy), 0, Math.cos(qy));
+      for (const k of [-2.6, 0, 2.6]) this.pushOut(this.pos, q.clone().addScaledVector(f2, k), 1.6);
+    }
+  }
+
   // ---------- araçlar ----------
   /** Etkin aracı oyuncunun yanına park eder (yoksa/değiştiyse yeniden kurar). */
   spawnVehicle(nearPlayer = false) {
@@ -751,6 +794,7 @@ export class Game {
     this.updateSick(dt);
     this.updateSpot();
     this.updateShelter(dt);
+    this.updateTrams(dt);
     this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }

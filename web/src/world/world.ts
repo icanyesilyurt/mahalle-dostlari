@@ -34,6 +34,7 @@ export interface WorldData {
   lamps?: [number, number][];
   vetDoor?: THREE.Vector3;
   vehicleStart?: [number, number, number];
+  trams?: { color: string; path: [number, number][] }[];
   homeDoor?: THREE.Vector3;
   shelterYard?: { x0: number; x1: number; z0: number; z1: number };
   lampH?: number;

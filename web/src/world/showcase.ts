@@ -19,8 +19,22 @@ export const REPLACED_PRIMS = [
   { x0: -122, x1: -61, z0: 18, z1: 44 },   // Mısır Çarşısı
   { x0: 37, x1: 53, z0: -210, z1: -195 },  // Galata Kulesi
   { x0: -8.5, x1: 8.5, z0: -50.5, z1: 0.5 }, // Galata Köprüsü
+  { x0: -177, x1: -167, z0: 203.5, z1: 207 },  // Kapalıçarşı kapısı
+  { x0: 165, x1: 195, z0: -485, z1: -455 },   // Taksim Cumhuriyet Anıtı
+  { x0: -90, x1: -85, z0: 219, z1: 225 },     // Dikilitaş
+  { x0: -90, x1: -85, z0: 259, z1: 265 },     // Örme Dikilitaş
+  { x0: -118, x1: -103, z0: 234, z1: 247 },   // eski Evin
+  { x0: -119, x1: -115, z0: 218, z1: 230 },   // Hipodrom tezgâhları
 ];
 export const primReplaced = (x: number, z: number) => REPLACED_PRIMS.some(b => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
+/** Yeni modellerle değiştirilen tek tek ilkel şekiller: cephe bloklarının eski büyük çatıları, kahverengi dolgu blokları, eski simit arabaları. */
+export function primDropped(D: any, p: any[]): boolean {
+  const [name, x, y, z, col, , , , sx] = p;
+  if (name === 'hip' && Math.abs(sx) > 15) return true;
+  if (name === 'box' && col === 'b0846a' && Math.abs(sx) > 20) return true;
+  if (y < 2.6 && (D.vendors as number[][]).some(v => Math.hypot(v[0] - x, v[1] - z) < 1.7)) return true;
+  return false;
+}
 
 type House = [number, number, number, number, number, number, number, string, string, string];
 
@@ -104,6 +118,7 @@ export interface ShowcaseOut {
   strays: StraySpawn[]; npcs: NpcSpawn[];
   walkers: [number, number][][];      // gezinen NPC'lerin dönüş yolları
   pigeons: [number, number][];        // güvercin yerleri
+  trams: { color: string; path: [number, number][] }[];
 }
 
 export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut {
@@ -114,7 +129,10 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   const at = (base: THREE.Matrix4, m: THREE.Matrix4) => new THREE.Matrix4().multiplyMatrices(base, m);
 
   // ---------- evler ----------
-  const houses = (D.houses as House[]).filter(h => inShowcase(h[0], h[1]));
+  const BAZAAR = { x0: -210.6, x1: -135.4, z0: 216.4, z1: 233.1 };   // Kapalıçarşı bloğu (Divan Yolu'nun güneyi)
+  const inBazaar = (x: number, z: number) => x > BAZAAR.x0 && x < BAZAAR.x1 && z > BAZAAR.z0 && z < BAZAAR.z1;
+  const houses = (D.houses as House[]).filter(h => inShowcase(h[0], h[1]) && !inBazaar(h[0], h[1]));
+  const PAL = ['e6a98c', 'f3e3b5', 'a9c1b4', 'd9c2a7', 'e9b9a3', 'c8d8bf', 'bcd0e3', 'f1d59c', 'e8c4cb'];
   const house = (h: House) => {
     const [cx, cz, w, d, ry, floors, shopN, kind, colH] = h;
     const wood = kind === 'ahsap', brick = kind === 'tugla', shop = shopN === 1;
@@ -148,6 +166,9 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
         // arka cephe: basit pencere (gövde tek blok)
         I.add('pen_lod', at(base, M(x, y + (f === 0 ? 1.0 : 0.85), d / 2, 0)));
       }
+      // yan cepheler: sıra sonunda düz duvar kalmasın (komşu evin içinde kalanlar görünmez)
+      const nzs = Math.max(1, Math.round(d / 3.4));
+      for (let k = 0; k < nzs; k++) { const zz = -d / 2 + d * (k + 0.5) / nzs; for (const sx of [-1, 1]) I.add(f === 0 && k === 0 && !shop ? 'pen_lod' : 'pen_lod', at(base, M(sx * (w / 2), y + (f === 0 ? 1.0 : 0.85), zz, sx * Math.PI / 2))); }
       if (f > 0) sbox(trims, base, trim, w + 0.12, 0.16, d + 0.12, 0, y - 0.08, 0);   // kat silmesi
     }
     I.add('building-block', at(base, M(0, 0, 0, 0, w, H / 0.63, d)), tint);           // gövde: tek blok
@@ -174,7 +195,6 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   for (const h of houses) house(h);
 
   // ---------- bitişik cephe blokları (eski 'walls'): 6-9 m'lik ayrı evlere bölünür, çoğu dükkânlı ve tenteli ----------
-  const PAL = ['e6a98c', 'f3e3b5', 'a9c1b4', 'd9c2a7', 'e9b9a3', 'c8d8bf', 'bcd0e3', 'f1d59c', 'e8c4cb'];
   for (const [ww, hh, dd, x, , z, , ry] of D.walls as any[][]) {
     if (!inShowcase(x, z)) continue;
     const n = Math.max(1, Math.round(ww / 7.4)), sw = ww / n, fl = Math.max(2, Math.round((hh - 0.4) / 3));
@@ -201,7 +221,7 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
     if (!grassAt(x, z)) treeRing(deco, x, z);
   }
   for (const [x, z] of D.lamps as number[][]) if (inShowcase(x, z)) I.add('lantern', M(x, 0, z, 0, 2.5, 2.5, 2.5));
-  for (const [x, z, ry] of D.benches as number[][]) if (inShowcase(x, z)) I.add('bench', at(M(x, 0, z, ry), M(-0.8, 0, 0.25, 0, 4, 2, 2.5)));
+  for (const [x, z, ry] of D.benches as number[][]) if (inShowcase(x, z)) I.add('uzun_bank', M(x, 0, z, ry));
 
   // ---------- Sultan Ahmet Camii + avlu (eski yerleşimdeki yer ve ölçü) ----------
   const stone = wallTint('#efe6d6');
@@ -219,6 +239,37 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   I.add('misir_carsisi', M(-91.5, 0, 31), wallTint('#e9d2b0'));
   I.add('galata_kulesi', M(45, 0, -202.5, 0, 1.2, 0.82, 1.2), wallTint('#e3cfae'));
   for (let k = 0; k < 5; k++) I.add('kopru', M(0, 0, -45 + k * 10, 0, 0.875, 1, 1));
+  // Kapalıçarşı: eski kahverengi kutuların yerinde kubbeli çarşı bölümleri + taç kapı + tezgâhlar; diğer dolgu blokları ev olur
+  const carsi = wallTint('#ecd6b2');
+  for (const p of D.prims as any[][]) {
+    const [name, x, , z, col, , , , sx, , sz] = p;
+    if (name !== 'box' || col !== 'b0846a' || Math.abs(sx) <= 20) continue;
+    if (inBazaar(x, z)) continue;
+    house([x, z, Math.abs(sx), Math.abs(sz), 0, 2, 0, 'siva', R.pick(PAL), 'win_a']);
+  }
+  { // iki sıra kubbeli çarşı (kuzey sıra caddeye, güney sıra arka sokağa bakar) + taç kapı + cadde boyunca tezgâhlar
+    const L = BAZAAR.x1 - BAZAAR.x0, n = Math.round(L / 9.5), seg = L / n, dd = (BAZAAR.z1 - BAZAAR.z0) / 2;
+    for (let i = 0; i < n; i++) for (const r of [0, 1]) {
+      const cx = BAZAAR.x0 + seg * (i + 0.5);
+      if (r === 0 && Math.abs(cx + 172) < seg / 2) continue;              // kapının olduğu bölüm
+      I.add('carsi_hol', M(cx, 0, BAZAAR.z0 + dd * (r + 0.5), 0, seg / 10, 1, dd / 7), carsi);
+    }
+    I.add('carsi_hol', M(-172, 0, BAZAAR.z0 + dd * 0.5 + 1.5, 0, seg / 10, 1, (dd - 3) / 7), carsi);
+    I.add('carsi_kapi', M(-172, 0, BAZAAR.z0 - 0.3, Math.PI, 1, 1, 1), carsi);
+    colliders.push({ x: -175.2, z: BAZAAR.z0 - 0.3, hw: 1.4, hd: 1.6 }, { x: -168.8, z: BAZAAR.z0 - 0.3, hw: 1.4, hd: 1.6 });
+    for (let i = 0; i < n; i++) { const tx = BAZAAR.x0 + seg * (i + 0.5); if (Math.abs(tx + 172) < 7) continue; const tz = BAZAAR.z0 - 2.2; I.add(i % 2 ? 'tezgah_seramik' : 'tezgah_hali', M(tx, 0, tz, Math.PI)); colliders.push({ x: tx, z: tz, hw: 1.2, hd: 0.6 }); }
+  }
+  // Taksim: Cumhuriyet Anıtı + AKM benzeri bina
+  I.add('cumhuriyet_aniti', M(180, 0, -470)); colliders.push({ x: 180, z: -470, hw: 3.6, hd: 2.6 });
+  I.add('akm', M(226, 0, -472, -Math.PI / 2)); colliders.push({ x: 226, z: -472, hw: 6.6, hd: 15.6 });
+  // Hipodrom: Alman Çeşmesi, Dikilitaş, Yılanlı Sütun, Örme Dikilitaş (bir hizada)
+  I.add('alman_cesmesi', M(-87.5, 0, 202), wallTint('#efe3cf')); colliders.push({ x: -87.5, z: 202, hw: 3.6, hd: 3.6 });
+  I.add('dikilitas', M(-87.5, 0, 222)); colliders.push({ x: -87.5, z: 222, hw: 1.7, hd: 1.7 });
+  I.add('yilanli_sutun', M(-87.5, 0, 242)); colliders.push({ x: -87.5, z: 242, hw: 1.3, hd: 1.3 });
+  I.add('orme_dikilitas', M(-87.5, 0, 262), wallTint('#e8d6b8')); colliders.push({ x: -87.5, z: 262, hw: 1.8, hd: 1.8 });
+  for (const [k, z] of [[0, 220], [1, 224], [2, 228]] as [number, number][]) I.add(k === 1 ? 'stall-green' : 'stall-red', M(-117, 0, z, Math.PI / 2, 2.2, 2.2, 2.2));
+  // eski "Evin" yerine sıcak bir mahalle evi + çiçekler
+  house([-111.5, 240, 8.5, 8, Math.PI / 2, 2, 0, 'siva', 'e9b9a3', 'win_a']);
 
   // ---------- meydan çeşmesi (eski havuzun yerinde) ----------
   const [fx, fz] = D.fountains[0] as number[];
@@ -290,7 +341,11 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   });
 
   const built = I.build(shadows); g.add(built.group);
-  return { group: g, colliders, fountainR: 4.6, tiles: built.tiles, spawn: new THREE.Vector3(120, 0, 142.2), spawnYaw: -Math.PI / 2, strays, npcs, walkers, pigeons };
+  const trams = [
+    { color: '#c8282d', path: [[180, -436], [180, -262]] as [number, number][] },        // İstiklal nostaljik
+    { color: '#c8282d', path: [[-205, 160], [125, 160], [125, 12]] as [number, number][] }, // Divan Yolu → Gülhane
+  ];
+  return { group: g, colliders, fountainR: 4.6, tiles: built.tiles, trams, spawn: new THREE.Vector3(120, 0, 142.2), spawnYaw: -Math.PI / 2, strays, npcs, walkers, pigeons };
 }
 
 /** Kaldırım kenar taşı: kaldırım/meydan döşemesinin yola (arnavut kaldırımı) değdiği kenarlarda. */

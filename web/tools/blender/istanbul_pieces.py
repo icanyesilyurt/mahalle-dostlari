@@ -815,6 +815,212 @@ def cit():
 
 assets.append(cit())
 
+# ---------- KAPALIÇARŞI: 10 m'lik çarşı bölümü (x boyunca), derinlik 7 m; kubbe sırası, kemerli dükkânlar, tente, asılı lamba ----------
+def carsi_hol():
+    p = []
+    L, D, H = 10.0, 7.0, 6.2
+    p.append(box('krem', L, D, H, 0, 0, 0))
+    p.append(box('krem_k', L + 0.1, D + 0.3, 0.35, 0, 0, H))
+    for sy in (-1, 1):  # iki cephede 3'er kemerli dükkân
+        f = '-y' if sy < 0 else '+y'
+        for i in (-1, 0, 1):
+            x = i * 3.2
+            p += arch_window('ten', 'cam', 2.2, 2.6, x, sy * (D / 2 + 0.02), 0.0, face=f, depth=0.12)
+            p.append(box('kahve_k', 2.1, 0.1, 0.25, x, sy * (D / 2 + 0.1), 2.0))       # vitrin kayıt
+            # tente (kırmızı-krem şerit)
+            for k in range(4):
+                bpy.ops.mesh.primitive_cube_add(size=1, location=(x - 1.05 + (k + 0.5) * 0.525, sy * (D / 2 + 0.65), 3.55), rotation=(sy * 0.4, 0, 0))
+                o = bpy.context.object; o.scale = (0.525, 1.2, 0.05); p.append(_done(o, 'kirmizi' if k % 2 == 0 else 'beyaz'))
+            # asılı fener
+            p.append(box('koyu', 0.03, 0.03, 0.6, x + 1.3, sy * (D / 2 + 0.4), 3.0))
+            p.append(cyl('sari', 0.12, 0.3, x + 1.3, sy * (D / 2 + 0.4), 2.7, n=8))
+            p.append(cyl('koyu', 0.15, 0.06, x + 1.3, sy * (D / 2 + 0.4), 3.0, n=8))
+        p.append(box('ten', L, 0.12, 0.3, 0, sy * (D / 2 + 0.04), 4.3))                # silme
+        for i in range(-2, 3): p += arch_window('ten', 'cam', 0.8, 0.9, i * 2.0, sy * (D / 2 + 0.02), 4.8, face=f)
+    # çatı: iki kubbe + kasnak
+    for x in (-2.5, 2.5):
+        p.append(cyl('krem', 1.9, 0.6, x, 0, H + 0.3, n=14))
+        p.append(dome('gri', 2.0, x, 0, H + 0.9, sz=0.85, seg=14, rings=5))
+        p.append(cyl('sari', 0.05, 0.6, x, 0, H + 2.6, n=6))
+    return join('carsi_hol', p)
+
+assets.append(carsi_hol())
+
+def carsi_kapi():
+    p = [box('krem', 9.0, 3.0, 9.0, 0, 0, 0), box('krem_k', 9.4, 3.3, 0.5, 0, 0, 9.0)]
+    p += arch_window('ten', 'koyu', 4.0, 5.6, 0, -1.52, 0.0, face='-y', depth=0.4)
+    p += arch_window('ten', 'koyu', 4.0, 5.6, 0, 1.52, 0.0, face='+y', depth=0.4)
+    p.append(box('yesil_k', 3.2, 0.12, 0.9, 0, -1.62, 6.6))              # yazıt levhası
+    for k in range(4): p.append(box('sari', 0.4, 0.14, 0.4, -1.0 + k * 0.66, -1.66, 6.85))
+    p.append(cyl('sari', 0.35, 0.12, 0, -1.6, 7.9, n=14, rx=math.pi / 2))  # tuğra rozeti
+    p.append(dome('gri', 1.6, 0, 0, 9.5, sz=0.9, seg=12, rings=4))
+    return join('carsi_kapi', p)
+
+assets.append(carsi_kapi())
+
+def tezgah(name, kind):
+    p = [box('kahve', 2.2, 1.0, 0.08, 0, 0, 0.8)]
+    for sx in (-1, 1):
+        for sy in (-1, 1): p.append(box('kahve_k', 0.07, 0.07, 0.8, sx * 1.0, sy * 0.42, 0))
+    if kind == 'hali':
+        cols = ['kirmizi', 'mavi_k', 'kiremit_k', 'mor']
+        for i in range(4): p.append(box(cols[i], 2.0, 0.85, 0.06, 0, 0, 0.88 + i * 0.06))
+        p.append(box('kirmizi', 0.06, 1.4, 1.8, 0, 0.6, 0.0))                       # asılı halı
+        p.append(box('sari', 0.07, 1.2, 1.5, 0.02, 0.6, 0.15))
+    else:
+        cols = ['mavi', 'yesil', 'sari', 'kirmizi', 'beyaz']
+        for i in range(10):
+            x = -0.85 + (i % 5) * 0.42; y = -0.2 + (i // 5) * 0.4
+            p.append(cyl(cols[i % 5], 0.16 if i % 2 else 0.12, 0.08 if i % 2 else 0.22, x, y, 0.88, n=10))
+    p.append(pyramid('kirmizi' if kind == 'hali' else 'yesil', 2.6, 1.6, 0.5, 0, 0, 2.1))
+    for sx in (-1, 1): p.append(box('kahve_k', 0.05, 0.05, 1.3, sx * 1.1, -0.5, 0.8))
+    return join(name, p)
+
+assets.append(tezgah('tezgah_hali', 'hali'))
+assets.append(tezgah('tezgah_seramik', 'seramik'))
+
+# ---------- TAKSİM: Cumhuriyet Anıtı (kemer + figür blokları + basamaklar) ve AKM benzeri sade bina ----------
+def cumhuriyet():
+    p = []
+    for i, r in enumerate((8.0, 6.7, 5.5)): p.append(cyl('mavi_gri', r, 0.35, 0, 0, i * 0.35, n=28))
+    p.append(cyl('yesil', 4.9, 0.12, 0, 0, 1.05, n=28))                       # çim halkası
+    p.append(box('beyaz_g', 7.0, 5.0, 3.0, 0, 0, 1.1))                          # kaide
+    for sx in (-1, 1):
+        p.append(box('beyaz_g', 1.4, 1.4, 9.0, sx * 3.2, 0, 4.1))               # kemer ayakları
+        p.append(box('beyaz', 1.7, 1.7, 0.4, sx * 3.2, 0, 13.1))
+    p.append(box('beyaz_g', 8.2, 1.6, 1.4, 0, 0, 13.5))                         # kemer üstü
+    p.append(cyl('beyaz_g', 2.5, 1.6, 0, 0, 11.6 - 0.8, n=16, rx=math.pi / 2))  # kemer yayı
+    # bronz figür grupları (iki cephede)
+    for sy in (-1, 1):
+        for k in (-1, 0, 1):
+            x = k * 1.1
+            p.append(box('kahve_k', 0.6, 0.5, 1.6, x, sy * 1.6, 4.1))
+            p.append(ball('kahve_k', 0.24, x, sy * 1.6, 5.95, seg=8))
+    p.append(box('kahve_k', 0.7, 0.6, 1.8, 0, 0, 4.1 + 0.0))
+    for sx in (-1, 1):  # bayrak direkleri
+        p.append(cyl('gri', 0.06, 9.0, sx * 6.0, 2.0, 1.05, n=6))
+        p.append(box('kirmizi', 0.04, 1.6, 1.0, sx * 6.0, 2.8, 9.0))
+    return join('cumhuriyet_aniti', p)
+
+assets.append(cumhuriyet())
+
+def akm():
+    p = []
+    W, D, H = 30.0, 12.0, 11.0
+    p.append(box('gri', W + 1, D + 1, 0.5, 0, 0, 0))
+    p.append(box('koyu', W - 1, D - 1, 3.4, 0, 0, 0.5))                       # zemin kat cam şerit
+    p.append(box('cam', W - 0.6, 0.1, 3.0, 0, -D / 2 + 0.45, 0.7))
+    p.append(box('beyaz', W, D, H - 3.9, 0, 0, 3.9))
+    for i in range(30):                                                       # dikey cephe lamelleri
+        x = -W / 2 + 0.5 + i * (W - 1) / 29
+        p.append(box('beyaz_g', 0.18, 0.4, H - 4.2, x, -D / 2 - 0.2, 4.0))
+    p.append(box('cam', W - 0.4, 0.06, H - 4.6, 0, -D / 2 + 0.02, 4.2))
+    p.append(box('beyaz', W + 2.0, D + 2.0, 0.4, 0, 0, H))                     # ince çatı saçağı
+    p.append(box('kirmizi', 6.0, 0.15, 1.0, -8, -D / 2 - 0.5, 9.5))           # tabela
+    return join('akm', p)
+
+assets.append(akm())
+
+# ---------- TRAMVAY: kırmızı nostaljik (İstiklal); boyalı gövde 'krem' karesi (oyunda renk verilir) ----------
+def tramvay():
+    p = []
+    L, W, H = 8.0, 2.3, 2.8
+    p.append(box('koyu', W - 0.2, L - 0.6, 0.45, 0, 0, 0.1))                  # şasi/boji
+    for sy in (-1, 1): p.append(box('gri', W - 0.4, 1.4, 0.35, 0, sy * 2.6, 0.0))
+    p.append(box('krem', W, L, 1.1, 0, 0, 0.55))                              # alt gövde (boyalı)
+    p.append(box('beyaz', W + 0.02, L + 0.02, 0.18, 0, 0, 1.6))               # krem bant
+    p.append(box('krem', W, L, 1.0, 0, 0, 1.78))                              # pencere katı
+    for sx in (-1, 1):
+        for i in range(6): p.append(box('cam', 0.05, 0.9, 0.7, sx * (W / 2 + 0.01), -2.9 + i * 1.16, 1.92))
+    for sy in (-1, 1):
+        p.append(box('cam', 1.7, 0.05, 0.8, 0, sy * (L / 2 + 0.01), 1.9))
+        p.append(cyl('sari', 0.12, 0.05, 0, sy * (L / 2 + 0.03), 1.2, n=10, rx=math.pi / 2))   # far
+        p.append(box('koyu', W + 0.1, 0.2, 0.25, 0, sy * (L / 2 + 0.08), 0.5))                # tampon
+    p.append(box('kahve_k', W + 0.15, L + 0.15, 0.15, 0, 0, H - 0.02))         # çatı
+    p.append(box('beyaz', W - 0.6, L - 1.5, 0.2, 0, 0, H + 0.13))
+    # pantograf
+    p.append(box('koyu', 0.8, 0.8, 0.1, 0, 0, H + 0.33))
+    for sy in (-1, 1):
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, sy * 0.35, H + 0.85), rotation=(sy * 0.7, 0, 0))
+        o = bpy.context.object; o.scale = (0.05, 0.05, 1.3); p.append(_done(o, 'koyu'))
+    p.append(box('koyu', 1.4, 0.06, 0.06, 0, 0, H + 1.4))
+    # hat tabelası
+    p.append(box('koyu', 1.2, 0.06, 0.3, 0, -L / 2 - 0.02, 2.55)); p.append(box('sari', 0.9, 0.07, 0.18, 0, -L / 2 - 0.04, 2.6))
+    return join('tramvay', p)
+
+assets.append(tramvay())
+
+# ---------- HİPODROM ----------
+def dikilitas():
+    p = [box('beyaz_g', 3.4, 3.4, 0.6, 0, 0, 0), box('beyaz_g', 2.8, 2.8, 3.2, 0, 0, 0.6), box('beyaz', 3.0, 3.0, 0.3, 0, 0, 3.8)]
+    for sx in (-1, 1):
+        for sy in (-1, 1): p.append(box('kahve_k', 0.45, 0.45, 0.45, sx * 1.05, sy * 1.05, 4.1))   # bronz küpler
+    p.append(box('ten', 1.6, 1.6, 0.3, 0, 0, 4.1))
+    bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=1.05, radius2=0.72, depth=17.0, location=(0, 0, 4.4 + 8.5), rotation=(0, 0, math.pi / 4))
+    p.append(_done(bpy.context.object, 'ten'))
+    p.append(pyramid('ten_k', 1.02, 1.02, 1.3, 0, 0, 21.4))
+    for k in range(6): p.append(box('kiremit_k', 0.06, 0.06, 0.5, 0, -0.62 + k * 0.0, 7.0 + k * 2.2))  # hiyeroglif izi
+    return join('dikilitas', p)
+
+assets.append(dikilitas())
+
+def orme():
+    p = [box('beyaz_g', 3.6, 3.6, 0.8, 0, 0, 0), box('krem_k', 3.0, 3.0, 2.4, 0, 0, 0.8)]
+    z = 3.2
+    for i in range(14):                                        # örme taş bloklar (düzensiz)
+        s = 2.2 - i * 0.09
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(((i * 37) % 5 - 2) * 0.02, 0, z + 0.55), rotation=(0, 0, (i % 3) * 0.03))
+        o = bpy.context.object; o.scale = (s, s, 1.1); p.append(_done(o, 'krem_k' if i % 2 else 'ten_k'))
+        z += 1.1
+    p.append(pyramid('krem_k', 0.9, 0.9, 1.2, 0, 0, z))
+    return join('orme_dikilitas', p)
+
+assets.append(orme())
+
+def yilanli():
+    p = [box('beyaz_g', 2.6, 2.6, 0.5, 0, 0, 0), cyl('kahve_k', 0.6, 0.3, 0, 0, 0.5, n=12)]
+    for i in range(36):                                        # üç sarmal yılan gövdesi
+        for k in range(3):
+            a = i * 0.55 + k * 2.094; z = 0.8 + i * 0.13
+            p.append(ball('kahve_k', 0.2, math.cos(a) * 0.22, math.sin(a) * 0.22, z, seg=6))
+    for k in range(3):
+        a = k * 2.094
+        p.append(ball('kahve', 0.26, math.cos(a) * 0.45, math.sin(a) * 0.45, 5.6, seg=8))
+    return join('yilanli_sutun', p)
+
+assets.append(yilanli())
+
+def alman_cesmesi():
+    p = [cyl('beyaz_g', 4.2, 0.5, 0, 0, 0, n=8), cyl('beyaz', 3.6, 0.4, 0, 0, 0.5, n=8)]
+    for i in range(8):                                         # 8 porfir sütun + kemer
+        a = i / 8 * math.pi * 2 + math.pi / 8
+        x, y = math.cos(a) * 3.0, math.sin(a) * 3.0
+        p.append(cyl('kiremit_k', 0.22, 3.4, x, y, 0.9, n=8))
+        p.append(box('beyaz', 0.55, 0.55, 0.3, x, y, 4.3))
+    p.append(cyl('krem', 3.5, 0.9, 0, 0, 4.6, n=8))
+    p.append(cyl('sari', 3.55, 0.18, 0, 0, 5.0, n=8))           # altın mozaik şerit
+    p.append(dome('yesil_k', 3.3, 0, 0, 5.5, sz=0.75, seg=16, rings=6))
+    p.append(ball('sari', 0.3, 0, 0, 8.1, seg=8))
+    p.append(cyl('mavi_gri', 1.4, 0.9, 0, 0, 0.9, n=8)); p.append(cyl('mavi', 1.2, 0.05, 0, 0, 1.78, n=8))   # orta havuz
+    return join('alman_cesmesi', p)
+
+assets.append(alman_cesmesi())
+
+# ---------- UZUN PARK BANKI (2-3 kişilik, ahşap çıta + dökme demir ayak), 1.9 m ----------
+def bank():
+    p = []
+    for k in range(4): p.append(box('kahve', 1.9, 0.11, 0.05, 0, -0.18 + k * 0.12, 0.45))     # oturak çıtaları
+    for k in range(3): p.append(box('kahve', 1.9, 0.05, 0.11, 0, 0.27, 0.6 + k * 0.15))        # sırt çıtaları
+    for sx in (-1, 1):
+        p.append(box('koyu', 0.06, 0.55, 0.06, sx * 0.85, 0.0, 0.42))
+        p.append(box('koyu', 0.06, 0.06, 0.45, sx * 0.85, -0.22, 0.0))
+        p.append(box('koyu', 0.06, 0.06, 0.95, sx * 0.85, 0.24, 0.0))
+        p.append(box('koyu', 0.06, 0.4, 0.06, sx * 0.85, -0.1, 0.65))                         # kolçak
+        p.append(torus('koyu', 0.1, 0.02, sx * 0.85, -0.05, 0.22, rx=0, maj=10, mn=3))
+    return join('uzun_bank', p)
+
+assets.append(bank())
+
 # ---------- dışa aktarım: her parça kendi düğümü, köken 0 ----------
 for o in assets:
     o.location = (0, 0, 0)

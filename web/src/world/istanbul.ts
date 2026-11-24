@@ -8,7 +8,7 @@ import { Batch, M, TEX, blob, hipRoof, rng } from './kit';
 import { bench, ferry, lamp, laundryLine } from './props';
 import type { Rect, WorldData, StraySpawn, NpcSpawn } from './world';
 import type { Kits } from './assets';
-import { buildShowcase, inShowcase, primReplaced } from './showcase';
+import { buildShowcase, inShowcase, primDropped, primReplaced } from './showcase';
 
 type House = [number, number, number, number, number, number, number, string, string, string];
 type Prim = [string, number, number, number, string, number, number, number, number, number, number, string];
@@ -217,6 +217,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   const keyMap: Record<string, string> = { plain: 'plain', roof: 'roof', gold: 'gold', stonewall: 'plaster' };
   for (const [name, x, y, z, col, rx, ry, rz, sx, sy, sz, key] of D.prims as Prim[]) {
     if (kits && primReplaced(x, z)) continue;
+    if (kits && primDropped(D, [name, x, y, z, col, rx, ry, rz, sx, sy, sz, key])) continue;
     if (kits && name.startsWith('cyl') && Math.abs(rx - 1.57) < 0.05 && sx > 4.5 && sx < 4.9) continue; // İstiklal pasaj kemeri: yeni cephelerin önünde dev disk gibi kalıyordu
     const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ')), new THREE.Vector3(sx, sy, sz));
     b.add(keyMap[key] ?? 'plain', prim(name), '#' + col, m);
@@ -257,7 +258,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     lands: (D.lands as number[][]).concat([D.bridge, D.pier]).map(([x0, x1, z0, z1]) => ({ x0, x1, z0, z1 })),
     spawn: sc ? sc.spawn : new THREE.Vector3(start[0], 0, start[1]),
     spawnYaw: sc ? sc.spawnYaw : start[2],
-    walkers: sc?.walkers, pigeons: sc?.pigeons, tiles: sc?.tiles,
+    walkers: sc?.walkers, pigeons: sc?.pigeons, tiles: sc?.tiles, trams: sc?.trams,
     vehicleStart: sc ? [115.6, 143.5, -Math.PI / 2 + 0.25] : undefined,
     vetDoor: sc ? new THREE.Vector3(36, 0, 186) : undefined, homeDoor: sc ? new THREE.Vector3(48, 0, 186) : undefined,
     shelterYard: sc ? { x0: 54.6, x1: 67.4, z0: 183.4, z1: 199.4 } : undefined, lamps: sc ? (D.lamps as [number, number][]) : undefined, lampH: 3.45,
