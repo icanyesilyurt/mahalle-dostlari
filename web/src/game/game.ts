@@ -184,6 +184,7 @@ export class Game {
     this.world = CITY_BUILDERS[id](mats, this.lowEnd, getKits());
     this.scene.add(this.world.root);
     this.pos.copy(this.world.spawn); this.yaw = this.world.spawnYaw; this.camYaw = this.yaw;
+    this.camTarget.copy(this.pos);  // kamera ilk karede doğrudan oyuncunun arkasında (haritayı boydan boya kaymasın)
     this.player = new Human(this.state.look);
     this.scene.add(this.player.root);
     this.makeGulls();
@@ -526,7 +527,7 @@ export class Game {
 
   // ---------- araçlar ----------
   /** Etkin aracı oyuncunun yanına park eder (yoksa/değiştiyse yeniden kurar). */
-  spawnVehicle() {
+  spawnVehicle(nearPlayer = false) {
     const kits = getKits(); const g = this.state.garage;
     if (this.riding) this.toggleRide();
     if (this.vehicle) { this.scene.remove(this.vehicle.root); this.vehicle = null; }
@@ -535,9 +536,20 @@ export class Game {
     const v = new Vehicle(def, kits, g.color[def.id] ?? def.defColor, g.acc[def.id] ?? []);
     const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     let spot = this.pos.clone().addScaledVector(right, 1.6 + def.radius);
+    const pk = g.park;
+    if (!nearPlayer && pk) { v.root.position.set(pk.x, 0, pk.z); v.yaw = pk.yaw; v.root.rotation.y = pk.yaw; this.scene.add(v.root); this.vehicle = v; return; }
+    if (!nearPlayer && this.world.vehicleStart) { const p = this.world.vehicleStart; spot = new THREE.Vector3(p[0], 0, p[1]); v.root.position.copy(spot); v.yaw = p[2]; v.root.rotation.y = p[2]; this.scene.add(v.root); this.vehicle = v; return; }
     for (const k of [1, -1, 2, -2]) { const c = this.pos.clone().addScaledVector(right, k * (1.6 + def.radius)); if (!blocked(c.x, c.z, def.radius, this.world.colliders) && onLand(c.x, c.z, this.world.lands)) { spot = c; break; } }
     v.root.position.copy(spot); v.yaw = this.yaw; v.root.rotation.y = this.yaw;
     this.scene.add(v.root); this.vehicle = v;
+    g.park = { x: spot.x, z: spot.z, yaw: this.yaw }; save(this.state);
+  }
+
+  /** Aracı oyuncunun yanına getirir (Araç çağır). */
+  callVehicle() {
+    if (this.riding) return;
+    if (this.vehicle && this.vehicle.root.position.distanceTo(this.pos) < 5) { this.ev.toast('Aracın zaten yanında'); return; }
+    this.spawnVehicle(true); sfx.tap(); this.ev.toast('Aracın yanına geldi'); this.ev.nearChanged();
   }
 
   setVehicleLook() { const v = this.vehicle; if (!v) return; const g = this.state.garage; v.setColor(g.color[v.def.id] ?? v.def.defColor); v.setAcc(g.acc[v.def.id] ?? []); }
@@ -557,6 +569,7 @@ export class Game {
       this.carriedSick = [];
       for (const c of this.carried) { this.scene.add(c.pet.root); c.pet.root.position.copy(this.pos).add(new THREE.Vector3(0.6, 0, 0.6)); c.pet.root.rotation.set(0, 0, 0); c.mode = 'follow'; c.pet.setPose('stand'); }
       this.carried = [];
+      this.state.garage.park = { x: v.root.position.x, z: v.root.position.z, yaw: v.yaw }; save(this.state);
       sfx.tap();
     } else {
       if (!this.nearVehicle) return;
@@ -761,6 +774,7 @@ export class Game {
       let dy = this.yaw - this.camYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       this.camYaw += dy * Math.min(1, dt * 2.4);
     }
+    if (this.camTarget.distanceTo(this.pos) > 12) { this.camTarget.copy(this.pos); this.armDist = this.camDist; } // ışınlanma: kamerayı yapıştır
     this.camTarget.lerp(this.pos, Math.min(1, dt * 10));
     const pivot = this.camTarget.clone().add(new THREE.Vector3(0, 1.5, 0));
     // duvar dibi: kameranın baktığı yönde yakın bir duvar varsa ekranın yarısı düz yüzey olmasın diye

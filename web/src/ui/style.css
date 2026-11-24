@@ -274,3 +274,9 @@ body.sheet-open #sheet { transform: translateY(0); }
 .thumb { width: 56px; height: 56px; border-radius: 12px; background: #fbf1e4; flex: none; }
 .col { display: flex; flex-direction: column; gap: 6px; }
 .side button .navemo { margin-top: -8px; font-size: 28px; }
+
+.iconbtn.call { font-size: 20px; margin-left: 6px; }
+.topbar .iconbtn.call { order: 0; }
+@media (orientation: portrait) { .iconbtn.call { position: fixed; right: calc(var(--sar) + 10px); top: calc(var(--sat) + 104px); margin: 0; } }
+.topbar .iconbtn.call { margin-left: auto; }
+.topbar .iconbtn.call + .iconbtn.gfx { margin-left: 6px; }

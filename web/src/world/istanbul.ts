@@ -258,6 +258,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     spawn: sc ? sc.spawn : new THREE.Vector3(start[0], 0, start[1]),
     spawnYaw: sc ? sc.spawnYaw : start[2],
     walkers: sc?.walkers, pigeons: sc?.pigeons, tiles: sc?.tiles,
+    vehicleStart: sc ? [115.6, 143.5, -Math.PI / 2 + 0.25] : undefined,
     vetDoor: sc ? new THREE.Vector3(36, 0, 186) : undefined, homeDoor: sc ? new THREE.Vector3(48, 0, 186) : undefined,
     shelterYard: sc ? { x0: 54.6, x1: 67.4, z0: 183.4, z1: 199.4 } : undefined, lamps: sc ? (D.lamps as [number, number][]) : undefined, lampH: 3.45,
     fountain: fountains[0], fountains, fountainR,

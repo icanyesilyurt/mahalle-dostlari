@@ -57,6 +57,7 @@ export class Hud {
     $('#btnBall').onclick = () => game.throwBall();
     $('#btnRide').onclick = () => game.toggleRide();
     $('#btnSpot').onclick = () => game.spotAction();
+    $('#callBtn').onclick = () => game.callVehicle();
     $('#nav-quests').onclick = () => this.sheetOpen === 'quests' ? this.close() : this.open('quests');
     setInterval(() => { if (this.sheetOpen === 'vet') this.render(); this.questDot(); }, 1000);
     $('#foodPill').onclick = () => this.foodModal();
@@ -108,6 +109,7 @@ export class Hud {
     $('#btnBall').classList.toggle('show', g.canThrow() && !s && !g.riding);
     const sp = $('#btnSpot'); sp.classList.toggle('show', !!g.spot);
     if (g.spot) { sp.querySelector('.lbl')!.textContent = g.spot.label; sp.querySelector('.spotico')!.textContent = g.spot.icon; }
+    $('#callBtn').textContent = ({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[g.state.garage.active] ?? '🚲';
     const rb = $('#btnRide'); rb.classList.toggle('show', g.nearVehicle || g.riding);
     rb.querySelector('.lbl')!.textContent = g.riding ? 'İn' : 'Bin';
     rb.querySelector('.rideico')!.textContent = ({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[g.state.garage.active] ?? '🚲';
