@@ -737,6 +737,84 @@ assets.append(join('aks_bayrak', [cyl('gri', 0.012, 1.1, 0, 0, 0, n=6), pyramid(
 assets.append(join('aks_cicek', [box('kiremit_k', 0.36, 0.12, 0.12, 0, 0, 0)] + [ico(['kirmizi', 'sari', 'mor', 'beyaz', 'kirmizi'][i], 0.06, -0.14 + i * 0.07, 0, 0.16) for i in range(5)] + [ico('yesil', 0.05, -0.1 + i * 0.1, 0.02, 0.12) for i in range(3)]))
 assets.append(join('aks_zil', [cyl('sari', 0.045, 0.03, 0, 0, 0, n=12), ball('sari', 0.04, 0, 0, 0.035, seg=10)]))
 
+# ---------- VETERİNER, OYUNCU EVİ, BARINAK (ön = -Y = glTF +Z) ----------
+def veteriner():
+    p = []
+    W, D, H = 8.0, 6.0, 4.2
+    p.append(box('mavi_gri', W + 0.6, D + 0.6, 0.3, 0, 0, 0))
+    p.append(box('beyaz', W, D, H, 0, 0, 0.3))
+    p.append(box('yesil', W + 0.3, D + 0.3, 0.35, 0, 0, H + 0.3))           # yeşil saçak bandı
+    p.append(pyramid('yesil_k', W + 0.8, D + 0.8, 1.2, 0, 0, H + 0.65, top=2.0))
+    # cam kapı + vitrinler
+    p.append(box('beyaz_g', 2.1, 0.1, 2.8, 0, -D / 2 - 0.03, 0.3))
+    p.append(box('cam', 1.7, 0.1, 2.5, 0, -D / 2 - 0.06, 0.32))
+    p.append(box('beyaz', 0.06, 0.12, 2.5, 0, -D / 2 - 0.08, 0.32))
+    for sx in (-1, 1):
+        p.append(box('beyaz_g', 2.0, 0.1, 1.8, sx * 2.6, -D / 2 - 0.03, 1.0))
+        p.append(box('cam', 1.75, 0.1, 1.55, sx * 2.6, -D / 2 - 0.06, 1.12))
+        p.append(box('yesil', 2.2, 0.9, 0.08, sx * 2.6, -D / 2 - 0.45, 2.9))   # tente
+    # tabela + yeşil artı
+    p.append(box('beyaz', 4.4, 0.15, 0.8, 0, -D / 2 - 0.1, 3.3))
+    p.append(box('yesil', 0.7, 0.2, 0.22, -1.6, -D / 2 - 0.12, 3.59)); p.append(box('yesil', 0.22, 0.2, 0.7, -1.6, -D / 2 - 0.12, 3.35))
+    for i in range(5): p.append(box('koyu', 0.35, 0.18, 0.4, -0.6 + i * 0.5, -D / 2 - 0.12, 3.5))   # yazı izi
+    # yan duvarda büyük artı
+    p.append(box('yesil', 0.15, 1.4, 0.45, W / 2 + 0.05, 0, 2.5)); p.append(box('yesil', 0.15, 0.45, 1.4, W / 2 + 0.05, 0, 2.03))
+    # pati izi işareti
+    p.append(cyl('kiremit', 0.35, 0.1, 2.9, -D / 2 - 0.2, 3.1, n=12, rx=math.pi / 2))
+    return join('veteriner', p)
+
+assets.append(veteriner())
+
+def oyuncu_evi():
+    p = []
+    W, D = 7.0, 6.0
+    p.append(box('ten', W + 0.4, D + 0.4, 0.4, 0, 0, 0))
+    p.append(box('krem', W, D, 3.3, 0, 0, 0.4))
+    p.append(box('kahve', W + 0.2, D + 0.2, 0.25, 0, 0, 3.7))
+    p.append(pyramid('kiremit', W + 1.0, D + 1.0, 2.2, 0, 0, 3.95, top=2.5))
+    p.append(box('kahve_k', 1.3, 0.12, 2.3, 0, -D / 2 - 0.04, 0.4))          # kapı
+    p.append(ball('sari', 0.07, 0.45, -D / 2 - 0.12, 1.5))
+    for sx in (-1, 1):
+        p.append(box('beyaz', 1.3, 0.1, 1.3, sx * 2.2, -D / 2 - 0.03, 1.4))
+        p.append(box('cam', 1.1, 0.1, 1.1, sx * 2.2, -D / 2 - 0.05, 1.5))
+        p.append(box('yesil_k', 0.45, 0.08, 1.2, sx * 2.2 + sx * 0.9, -D / 2 - 0.05, 1.45))
+        p.append(box('kiremit_k', 1.3, 0.3, 0.22, sx * 2.2, -D / 2 - 0.2, 1.2))
+        for k in range(3): p.append(ico(['kirmizi', 'mor', 'sari'][k], 0.1, sx * 2.2 - 0.4 + k * 0.4, -D / 2 - 0.25, 1.48))
+    p.append(box('kahve', 2.2, 1.2, 0.18, 0, -D / 2 - 0.6, 0.0))             # basamak
+    p.append(box('gri', 0.6, 0.6, 2.0, 2.0, 1.0, 4.5))                        # baca
+    p.append(cyl('kirmizi', 0.18, 1.0, 3.2, -D / 2 - 1.4, 0, n=8)); p.append(box('kirmizi', 0.45, 0.3, 0.3, 3.2, -D / 2 - 1.4, 1.0))  # posta kutusu
+    return join('oyuncu_evi', p)
+
+assets.append(oyuncu_evi())
+
+def barinak():
+    p = []
+    W, D, H = 12.0, 5.0, 3.4
+    p.append(box('ten', W + 0.4, D + 0.4, 0.3, 0, 0, 0))
+    p.append(box('krem', W, D, H, 0, 0, 0.3))
+    p.append(pyramid('kiremit', W + 1.0, D + 1.2, 1.6, 0, 0, H + 0.3, top=W - 3))
+    p.append(box('kahve', W + 0.3, D + 0.3, 0.2, 0, 0, H + 0.2))
+    # bölmeler: kemerli kapılar
+    for i in range(4):
+        x = -W / 2 + 1.5 + i * 3.0
+        p += arch_window('kahve_k', 'koyu', 1.4, 1.6, x, -D / 2 - 0.02, 0.3, face='-y', depth=0.12)
+        p.append(cyl('kiremit', 0.25, 0.1, x, -D / 2 - 0.12, 2.4, n=12, rx=math.pi / 2))   # pati rozeti
+    # tabela: BARINAK
+    p.append(box('kahve', 5.0, 0.15, 0.9, 0, -D / 2 - 0.12, H + 0.45))
+    for i in range(7): p.append(box('beyaz', 0.45, 0.18, 0.5, -1.8 + i * 0.6, -D / 2 - 0.15, H + 0.65))
+    return join('barinak', p)
+
+assets.append(barinak())
+
+def cit():
+    """2 m ahşap çit parçası (x boyunca)."""
+    p = [box('kahve', 0.12, 0.12, 1.1, -1.0, 0, 0), box('kahve', 0.12, 0.12, 1.1, 1.0, 0, 0)]
+    for z in (0.35, 0.8): p.append(box('kahve_k', 2.1, 0.06, 0.12, 0, 0, z))
+    for i in range(5): p.append(box('ten', 0.14, 0.05, 1.0, -0.8 + i * 0.4, -0.04, 0.0))
+    return join('cit', p)
+
+assets.append(cit())
+
 # ---------- dışa aktarım: her parça kendi düğümü, köken 0 ----------
 for o in assets:
     o.location = (0, 0, 0)

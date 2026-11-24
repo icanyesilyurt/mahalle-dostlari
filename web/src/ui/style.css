@@ -260,3 +260,17 @@ body.sheet-open #sheet { transform: translateY(0); }
 #btnRide { background: radial-gradient(circle at 35% 30%, #fffdf8, #d9f0e8); }
 .emo { font-size: 34px; line-height: 1; }
 .swatch.big { width: 40px; height: 40px; display: inline-block; border-radius: 50%; box-shadow: inset 0 -3px 0 rgba(0,0,0,.15); }
+
+/* bakım/veteriner/barınak/görevler */
+.spotico, .navemo { font-size: 26px; line-height: 1; display: block; }
+#btnSpot { background: radial-gradient(circle at 35% 30%, #fffdf8, #ffe0e0); }
+#nav-quests { position: relative; }
+#nav-quests .dot { position: absolute; top: 4px; right: 4px; width: 12px; height: 12px; border-radius: 50%; background: #e2493b; border: 2px solid #fff; display: none; }
+#nav-quests .dot.on { display: block; }
+.plabel .sick { font-size: 18px; margin-left: 2px; animation: sickbob 1s ease-in-out infinite; display: inline-block; }
+@keyframes sickbob { 50% { transform: translateY(-3px); } }
+.bar { height: 10px; border-radius: 6px; background: #f1e2cf; overflow: hidden; margin: 6px 0 4px; }
+.bar i { display: block; height: 100%; background: linear-gradient(90deg, #f2a33b, #e07a5f); border-radius: 6px; }
+.thumb { width: 56px; height: 56px; border-radius: 12px; background: #fbf1e4; flex: none; }
+.col { display: flex; flex-direction: column; gap: 6px; }
+.side button .navemo { margin-top: -8px; font-size: 28px; }

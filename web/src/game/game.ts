@@ -14,6 +14,9 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { setMultiDraw } from '../world/assets';
 import { NIGHT, dayState, hourNow, skyMaterial } from './daycycle';
 import { VEHICLE_DEFS, Vehicle } from './vehicles';
+import { admit, ensureQuests, questProgress, DECOR } from '../core/care';
+import { petHouse as petHouseModel } from '../world/pethouse';
+import type { StraySpawn } from '../world/world';
 import { CITY_BUILDERS, WorldData, blocked, collide, getKits, makeMaterials, onLand } from '../world/world';
 import { haptic, sfx } from '../ui/sfx';
 import { Input } from './input';
@@ -23,6 +26,7 @@ export interface Stray {
   id: string; name: string; pet: Pet; home: THREE.Vector3;
   mode: StrayMode; t: number; target: THREE.Vector3 | null; yaw: number;
   hungryAt: number; thirstyAt: number; bowl: THREE.Object3D | null; label: HTMLElement; vocalT: number;
+  sick?: boolean; carried?: boolean;
 }
 interface Companion { uid: string; pet: Pet; yaw: number; mode: 'follow' | 'fetch' | 'return' | 'sit' | 'eat' | 'happy' | 'home'; t: number; ball: THREE.Object3D | null; label: HTMLElement; home?: THREE.Vector3 }
 interface Ball { mesh: THREE.Mesh; vel: THREE.Vector3; resting: boolean; owner: Companion }
@@ -33,7 +37,10 @@ export interface GameEvents {
   changed(): void;
   hearts(at: THREE.Vector3): void;
   nearChanged(): void;
+  open?(id: string): void;
 }
+
+export type SpotKind = 'carry' | 'drop' | 'vet' | 'shelter' | 'home';
 
 const now = () => Date.now();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -75,6 +82,12 @@ export class Game {
   riding = false;
   nearVehicle = false;
   private carried: Companion[] = [];
+  private carriedSick: Stray[] = [];
+  spot: { kind: SpotKind; label: string; icon: string } | null = null;
+  private sickT = 8;
+  private shelterGroup = new THREE.Group();
+  private shelterPets: { pet: Pet; target: THREE.Vector3 | null; t: number; yaw: number }[] = [];
+  private rideMeters = 0;
   private walkers: { h: Human; path: THREE.Vector3[]; i: number; sp: number }[] = [];
   private pigeons: { im: THREE.InstancedMesh; b: { home: THREE.Vector3; p: THREE.Vector3; v: THREE.Vector3; yaw: number; air: number; t: number }[] } | null = null;
   private balls: Ball[] = [];
@@ -208,20 +221,10 @@ export class Game {
     }
     // sokak hayvanları
     const R = rng(99);
-    for (const sp of this.world.strays) {
-      const breed: Breed = sp.look ? { id: sp.id, species: sp.look.species, name: sp.name, price: {}, look: { size: 1, belly: '#f4efe6', ...sp.look } as BreedLook } : breedById(sp.breed)!;
-      const pet = new Pet(breed, R.int(1, 9999));
-      pet.root.position.set(sp.x, 0, sp.z);
-      this.scene.add(pet.root);
-      const label = document.createElement('div'); label.className = 'plabel'; this.labelsEl.appendChild(label);
-      const st: Stray = { id: sp.id, name: sp.name, pet, home: new THREE.Vector3(sp.x, 0, sp.z), mode: 'idle', t: R.range(0, 4), target: null, yaw: R.range(0, 6.28), hungryAt: 0, thirstyAt: 0, bowl: null, label, vocalT: R.range(4, 12) };
-      const f = this.state.friends[sp.id];
-      st.hungryAt = R.chance(f ? 0.6 : 0.85) ? 0 : now() + R.range(60, 240) * 1000;
-      st.thirstyAt = R.chance(0.55) ? 0 : now() + R.range(60, 300) * 1000;
-      if (R.chance(0.2)) { st.mode = 'sleep'; st.t = R.range(8, 20); pet.sleeping = true; pet.setPose('lie'); }
-      this.strays.push(st);
-    }
+    for (const sp of this.world.strays) this.addStray(sp, R);
     this.spawnVehicle();
+    this.scene.add(this.shelterGroup); this.refreshShelter();
+    ensureQuests(this.state, now());
     // kurulu kulübeler
     for (const h of this.state.houses.filter(h => h.city === id)) this.addHouseObj(h.uid);
     this.spawnPets();
@@ -411,6 +414,116 @@ export class Game {
     loop();
   }
 
+  /** Bir sokak hayvanını sahneye ekler (yükleme ve veterinerden sokağa bırakma için). */
+  addStray(sp: StraySpawn, R = rng(Math.floor(Math.random() * 9999))): Stray {
+    const breed: Breed = sp.look ? { id: sp.id, species: sp.look.species, name: sp.name, price: {}, look: { size: 1, belly: '#f4efe6', ...sp.look } as BreedLook } : breedById(sp.breed)!;
+    const pet = new Pet(breed, R.int(1, 9999));
+    pet.root.position.set(sp.x, 0, sp.z);
+    this.scene.add(pet.root);
+    const label = document.createElement('div'); label.className = 'plabel'; this.labelsEl.appendChild(label);
+    const st: Stray = { id: sp.id, name: sp.name, pet, home: new THREE.Vector3(sp.x, 0, sp.z), mode: 'idle', t: R.range(0, 4), target: null, yaw: R.range(0, 6.28), hungryAt: 0, thirstyAt: 0, bowl: null, label, vocalT: R.range(4, 12) };
+    const f = this.state.friends[sp.id];
+    st.hungryAt = R.chance(f ? 0.6 : 0.85) ? 0 : now() + R.range(60, 240) * 1000;
+    st.thirstyAt = R.chance(0.55) ? 0 : now() + R.range(60, 300) * 1000;
+    if (R.chance(0.2)) { st.mode = 'sleep'; st.t = R.range(8, 20); pet.sleeping = true; pet.setPose('lie'); }
+    this.strays.push(st);
+    return st;
+  }
+
+  // ---------- hasta hayvanlar, veteriner, barınak ----------
+  /** Zaman zaman bir sokak hayvanı hastalanır (aynı anda en fazla 3); topallar, üstünde 🤒 görünür. */
+  private updateSick(dt: number) {
+    if (!this.world.vetDoor) return;
+    this.sickT -= dt; if (this.sickT > 0) return;
+    this.sickT = 70 + Math.random() * 40;
+    if (this.strays.filter(s => s.sick).length >= 3) return;
+    const cand = this.strays.filter(s => !s.sick && !s.carried && s.mode !== 'sleep').map(s => [s, s.pet.root.position.distanceTo(this.pos)] as const).filter(([, d]) => d > 12 && d < 90);
+    if (!cand.length) return;
+    const [s] = cand[Math.floor(Math.random() * cand.length)];
+    s.sick = true; s.pet.limp = true;
+    this.ev.toast(`🤒 ${s.name} hastalandı! Aracınla veterinere götür`);
+  }
+
+  /** Bağlam butonu: hastayı araca al / veterinere teslim et / veteriner, barınak, evim panelleri. */
+  private updateSpot() {
+    let sp: Game['spot'] = null;
+    const v = this.vehicle;
+    if (this.riding && v && this.world.vetDoor) {
+      const free = v.def.cap - this.carried.length - this.carriedSick.length;
+      if (this.carriedSick.length && v.root.position.distanceTo(this.world.vetDoor) < 9) sp = { kind: 'drop', label: 'Teslim et', icon: '🏥' };
+      else if (free > 0 && this.strays.some(s => s.sick && !s.carried && s.pet.root.position.distanceTo(v.root.position) < v.def.radius + 2.6)) sp = { kind: 'carry', label: 'Hastayı al', icon: '🤒' };
+    } else if (!this.riding) {
+      if (this.world.vetDoor && this.pos.distanceTo(this.world.vetDoor) < 6) sp = { kind: 'vet', label: 'Veteriner', icon: '🏥' };
+      else if (this.world.homeDoor && this.pos.distanceTo(this.world.homeDoor) < 4.5) sp = { kind: 'home', label: 'Evim', icon: '🏡' };
+      else if (this.world.shelterYard) { const y = this.world.shelterYard; if (this.pos.x > y.x0 - 2 && this.pos.x < y.x1 + 2 && this.pos.z > y.z0 - 2 && this.pos.z < y.z1 + 3) sp = { kind: 'shelter', label: 'Barınak', icon: '🐾' }; }
+    }
+    if ((sp?.kind ?? null) !== (this.spot?.kind ?? null)) { this.spot = sp; this.ev.nearChanged(); } else this.spot = sp;
+  }
+
+  spotAction() {
+    const sp = this.spot; if (!sp) return;
+    const v = this.vehicle;
+    if (sp.kind === 'carry' && v) {
+      const s = this.strays.filter(s => s.sick && !s.carried).sort((a, b) => a.pet.root.position.distanceTo(v.root.position) - b.pet.root.position.distanceTo(v.root.position))[0];
+      if (!s) return;
+      if (v.def.smallOnly && s.pet.height >= 0.5) { this.ev.toast(`${s.name} bisiklet sepetine sığmıyor. Scooter ya da pikapla gel`); return; }
+      const slot = this.carried.length + this.carriedSick.length;
+      s.carried = true; v.root.add(s.pet.root); s.pet.root.position.set(...v.def.slots[slot]); s.pet.root.rotation.set(0, 0, 0); s.pet.setPose('lie'); s.pet.speed = 0;
+      this.carriedSick.push(s); sfx.purr();
+      this.ev.toast(`${s.name} araçta. Veterinere götür 🏥`);
+    } else if (sp.kind === 'drop') {
+      for (const s of this.carriedSick) {
+        const look = { ...s.pet.breed.look, species: s.pet.breed.species };
+        admit(this.state, s.id + '_' + now().toString(36), s.name, look, now());
+        s.pet.root.parent?.remove(s.pet.root); s.label.remove();
+        this.strays = this.strays.filter(x => x !== s);
+      }
+      const n = this.carriedSick.length; this.carriedSick = [];
+      sfx.success(); save(this.state); this.ev.changed();
+      this.ev.toast(`${n} dost tedaviye alındı. Veteriner panelinden takip et`);
+      this.ev.open?.('vet');
+    } else this.ev.open?.(sp.kind);
+    this.ev.nearChanged();
+  }
+
+  /** Veterinerden sokağa bırakılan dost: kapının önünde sağlıklı olarak dolaşır. */
+  releaseToStreet(name: string, look: any) {
+    const d = this.world.vetDoor ?? this.pos;
+    this.addStray({ id: 'sk_' + now().toString(36), name, breed: '', x: d.x + (Math.random() - 0.5) * 3, z: d.z + 2, look });
+  }
+
+  /** Barınak bahçesindeki dostlar + kulübeler + süsler (durum değişince yeniden kurulur). */
+  refreshShelter() {
+    const y = this.world.shelterYard; const kits = getKits();
+    this.shelterGroup.clear(); this.shelterPets = [];
+    if (!y) return;
+    const sh = this.state.shelter;
+    for (let i = 0; i < sh.level; i++) { const k = petHouseModel(i % 2 ? 'kedi_evi' : 'kopek_kulubesi', ['#e07a5f', '#7a9e7e', '#f2c94c', '#3b6aa8'][i % 4], ''); k.position.set(y.x0 + 1.6 + i * 2.6, 0, y.z0 + 1.6); this.shelterGroup.add(k); }
+    if (kits) {
+      const put = (n: string, x: number, z: number, s = 1, ry = 0) => { const a = kits.get(n); const m = new THREE.Mesh(a.geo, Array.isArray(a.mat) ? a.mat : a.mat); m.position.set(x, 0, z); m.scale.setScalar(s); m.rotation.y = ry; m.castShadow = true; this.shelterGroup.add(m); };
+      if (sh.decor.includes('dekor_cicek')) for (let i = 0; i < 6; i++) { put('pot_large', y.x0 + 0.8, y.z0 + 3 + i * 2.4, 1.8); put('flower_redA', y.x0 + 0.8, y.z0 + 3 + i * 2.4, 2.6); }
+      if (sh.decor.includes('dekor_golgelik')) put('stall-green', (y.x0 + y.x1) / 2 + 3, y.z1 - 4, 2.6);
+    }
+    if (sh.decor.includes('dekor_oyuncak')) for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshStandardMaterial({ color: ['#e2493b', '#f2c94c', '#3b8ed6', '#9a5ac8', '#5aa055'][i], roughness: 0.4 })); b.position.set(y.x0 + 3 + i * 1.9, 0.12, y.z1 - 2 - (i % 2) * 2); this.shelterGroup.add(b); }
+    sh.animals.forEach((a, i) => {
+      const breed: Breed = { id: a.uid, species: a.species, name: a.name, price: {}, look: { size: 1, belly: '#f4efe6', ...a.look } as BreedLook };
+      const pet = new Pet(breed, i + 5, { wear: a.wear, collar: a.collar });
+      pet.root.position.set(y.x0 + 2 + (i % 4) * 2.8, 0, y.z0 + 5 + Math.floor(i / 4) * 3);
+      this.shelterGroup.add(pet.root); this.shelterPets.push({ pet, target: null, t: Math.random() * 3, yaw: Math.random() * 6 });
+    });
+  }
+
+  private updateShelter(dt: number) {
+    const y = this.world.shelterYard; if (!y || !this.shelterPets.length) return;
+    if (this.pos.distanceTo(new THREE.Vector3((y.x0 + y.x1) / 2, 0, (y.z0 + y.z1) / 2)) > 90) return;
+    for (const s of this.shelterPets) {
+      s.t -= dt;
+      if (s.t < 0) { s.t = 3 + Math.random() * 6; s.target = Math.random() < 0.6 ? new THREE.Vector3(y.x0 + 1 + Math.random() * (y.x1 - y.x0 - 2), 0, y.z0 + 3 + Math.random() * (y.z1 - y.z0 - 4)) : null; s.pet.setPose(s.target ? 'stand' : (Math.random() < 0.5 ? 'sit' : 'lie')); }
+      if (s.target) { if (this.walkTo(s.pet, s, s.target, 0.9, dt, 0.3)) s.target = null; } else s.pet.speed *= 0.85;
+      s.pet.root.rotation.y = s.yaw; s.pet.update(dt);
+    }
+  }
+
   // ---------- araçlar ----------
   /** Etkin aracı oyuncunun yanına park eder (yoksa/değiştiyse yeniden kurar). */
   spawnVehicle() {
@@ -440,6 +553,8 @@ export class Game {
       this.pos.copy(p); v.speed = 0;
       this.scene.add(this.player.root); this.player.root.visible = true; this.player.sitting = false;
       this.player.root.position.copy(this.pos); this.player.root.rotation.set(0, v.yaw, 0);
+      for (const s of this.carriedSick) { this.scene.add(s.pet.root); s.pet.root.position.copy(this.pos).add(new THREE.Vector3(-0.8, 0, 0.8)); s.pet.root.rotation.set(0, 0, 0); s.carried = false; s.mode = 'idle'; s.t = 4; s.home.copy(s.pet.root.position); }
+      this.carriedSick = [];
       for (const c of this.carried) { this.scene.add(c.pet.root); c.pet.root.position.copy(this.pos).add(new THREE.Vector3(0.6, 0, 0.6)); c.pet.root.rotation.set(0, 0, 0); c.mode = 'follow'; c.pet.setPose('stand'); }
       this.carried = [];
       sfx.tap();
@@ -483,6 +598,8 @@ export class Game {
     if (real < v.speed * 0.6) v.speed = real;
     v.root.position.copy(this.pos); v.root.rotation.y = v.yaw; v.animate(dt, turnRate);
     this.yaw = v.yaw; this.player.speed = 0;
+    this.rideMeters += real * dt;
+    if (this.rideMeters >= 25) { questProgress(this.state, 'ride', Math.floor(this.rideMeters), now()); this.rideMeters = 0; }
   }
 
   /** Gün döngüsü: gerçek saate göre gökyüzü, güneş/ay, ışıklar; gece fenerler ve pencereler yanar. */
@@ -618,6 +735,9 @@ export class Game {
     this.updateWalkers(dt);
     this.updateTiles();
     this.updateDay(dt);
+    this.updateSick(dt);
+    this.updateSpot();
+    this.updateShelter(dt);
     this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
@@ -770,6 +890,7 @@ export class Game {
     const tnow = now();
     for (const s of this.strays) {
       const p = s.pet; s.t -= dt;
+      if (s.carried) { p.speed = 0; p.update(dt); continue; }
       const dPlayer = p.root.position.distanceTo(this.pos);
       const hungry = s.hungryAt <= tnow;
       if (dPlayer > 110) { p.root.visible = false; continue; } // sis ötesindekileri hiç güncelleme
@@ -952,10 +1073,10 @@ export class Game {
       const d = s.pet.root.position.distanceTo(this.pos);
       const hungry = s.hungryAt <= tnow, thirsty = s.thirstyAt <= tnow;
       const isFriend = (this.state.friends[s.id]?.fed ?? 0) > 0;
-      const icons = (hungry ? '<i class="need food"></i>' : '') + (thirsty ? '<i class="need drop"></i>' : '') + (s.pet.sleeping ? '<b class="zz">z z</b>' : '');
+      const icons = (s.sick ? '<b class="sick">🤒</b>' : '') + (hungry ? '<i class="need food"></i>' : '') + (thirsty ? '<i class="need drop"></i>' : '') + (s.pet.sleeping ? '<b class="zz">z z</b>' : '');
       const near = s === this.near;
       const html = (d < 9 || near ? `<span>${isFriend ? '💛 ' : ''}${s.name}</span>` : '') + icons;
-      place(s.label, s.pet, html, (d < 22 && (hungry || thirsty || s.pet.sleeping)) || d < 9);
+      place(s.label, s.pet, html, (d < 22 && (hungry || thirsty || s.pet.sleeping)) || d < 9 || (!!s.sick && !s.carried && d < 45));
       s.label.classList.toggle('near', near);
     }
     for (const c of [this.companion, ...this.homePets]) if (c) {

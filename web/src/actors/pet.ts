@@ -88,6 +88,8 @@ export class Pet {
   private reactT = 0;
   lookYaw = 0;
   sleeping = false;
+  /** Hasta: sağ ön bacağını yere basmaz, sekerek yürür. */
+  limp = false;
 
   constructor(public breed: Breed, seed = 1, opts: { wear?: string; collar?: string } = {}) {
     const L = breed.look; this.cat = breed.species === 'cat';
@@ -285,6 +287,7 @@ export class Pet {
       if (!front) rx -= sitK * 1.35;
       rx += lieK * (front ? -1.35 : 1.35);
       if (k.beg > 0.01 && front) rx -= k.beg * 1.2;
+      if (this.limp && i === 1) rx = -0.9 + (moving ? Math.sin(this.phase) * 0.1 : 0);
       this.legs[i].rotation.x = rx;
       this.legs[i].position.y = this.legLen + 0.02 - lieK * this.legLen * 0.85 - (front ? 0 : sitK * this.legLen * 0.35) - (front && k.beg > 0 ? -k.beg * 0.08 : 0);
     }
@@ -298,7 +301,7 @@ export class Pet {
     const breath = 1 + Math.sin(this.t * (this.sleeping ? 1.6 : 3)) * (this.sleeping ? 0.035 : 0.012);
     this.body.scale.set(1, breath, 1);
     this.body.rotation.x = -sitK * 0.36 - k.beg * 0.3 + k.eat * 0.12 + (moving ? Math.sin(this.phase * 2) * 0.03 : 0);
-    this.body.rotation.z = k.happy * Math.sin(this.t * 9) * 0.06 + lieK * 0.15;
+    this.body.rotation.z = k.happy * Math.sin(this.t * 9) * 0.06 + lieK * 0.15 + (this.limp ? 0.08 + (moving ? Math.max(0, Math.sin(this.phase * 2)) * 0.08 : 0) : 0);
     this.body.position.z = sitK * -this.bodyLen * 0.12;
     // kafa
     let hx = 0, hy = this.lookYaw * (1 - lieK), hz = 0;

@@ -9,6 +9,8 @@ import { petThumb } from '../game/thumbs';
 import { TestAdProvider, AdProvider } from '../core/ads';
 import { I } from './icons';
 import { HAIR_STYLES, Human } from '../actors/human';
+import { CARE_COIN, DECOR, SHELTER_UPGRADE, VET_COIN, buyDecor, care, claimQuest, claimable, discharge, dayKey, ensureQuests, level, shelterCap, speedUp, upgradeShelter, xpForLevel } from '../core/care';
+import { petThumbLook } from '../game/thumbs';
 import { haptic, setMuted, sfx } from './sfx';
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -54,6 +56,9 @@ export class Hud {
     $('#btnPet').onclick = () => game.pet();
     $('#btnBall').onclick = () => game.throwBall();
     $('#btnRide').onclick = () => game.toggleRide();
+    $('#btnSpot').onclick = () => game.spotAction();
+    $('#nav-quests').onclick = () => this.sheetOpen === 'quests' ? this.close() : this.open('quests');
+    setInterval(() => { if (this.sheetOpen === 'vet') this.render(); this.questDot(); }, 1000);
     $('#foodPill').onclick = () => this.foodModal();
     $('#coinPlus').onclick = () => this.open('shop', 'box');
     $('#gemPlus').onclick = () => this.open('shop', 'gem');
@@ -101,6 +106,8 @@ export class Hud {
     $('#btnWater').querySelector('.lbl')!.textContent = g.nearFountain ? 'Doldur' : 'Su';
     $('#btnPet').classList.toggle('show', !!s || !!g.nearCompanion);
     $('#btnBall').classList.toggle('show', g.canThrow() && !s && !g.riding);
+    const sp = $('#btnSpot'); sp.classList.toggle('show', !!g.spot);
+    if (g.spot) { sp.querySelector('.lbl')!.textContent = g.spot.label; sp.querySelector('.spotico')!.textContent = g.spot.icon; }
     const rb = $('#btnRide'); rb.classList.toggle('show', g.nearVehicle || g.riding);
     rb.querySelector('.lbl')!.textContent = g.riding ? 'İn' : 'Bin';
     rb.querySelector('.rideico')!.textContent = ({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[g.state.garage.active] ?? '🚲';
@@ -229,6 +236,31 @@ export class Hud {
           return `<div class="card shopitem" ${i.rarity ? `style="--rc:${RARITY_COLOR[i.rarity]}"` : ''}>${i.rarity ? `<span class="rar">${RARITY_LABEL[i.rarity]}</span>` : ''}<div class="ico">${itemIcon(i)}</div><b>${i.name}</b>${i.desc ? `<small>${i.desc}</small>` : ''}${btn}</div>`;
         }).join('')}</div>`;
       }
+    } else if (id === 'quests') {
+      ensureQuests(s, Date.now());
+      const lv = level(s.xp), a = xpForLevel(lv), b = xpForLevel(lv + 1);
+      title.innerHTML = `<b class="navemo">📋</b><span>Günlük Görevler</span>`;
+      html = `<div class="list"><div class="card"><b>Seviye ${lv}</b><div class="bar"><i style="width:${Math.round((s.xp - a) / (b - a) * 100)}%"></i></div><small>${s.xp - a} / ${b - a} XP · Görevler her gün yenilenir</small></div>
+        ${s.quests.list.map(q => `<div class="card row between"><div class="info"><b>${q.text}</b><div class="bar"><i style="width:${Math.round(q.progress / q.target * 100)}%"></i></div><small>${q.kind === 'ride' ? Math.floor(q.progress) + ' / ' + q.target + ' m' : q.progress + ' / ' + q.target} · ${q.coins} jeton${q.gems ? ' + ' + q.gems + ' elmas' : ''} · ${q.xp} XP</small></div>
+          ${q.claimed ? '<span class="chip ok">Alındı</span>' : `<button class="btn" data-claim="${q.id}" ${q.progress >= q.target ? '' : 'disabled'}>Ödülü al</button>`}</div>`).join('')}</div>`;
+    } else if (id === 'vet') {
+      title.innerHTML = `<b class="navemo">🏥</b><span>Veteriner</span>`;
+      const tn = Date.now();
+      html = `<div class="list">${s.treatments.length ? s.treatments.map(t => { const left = t.readyAt - tn; return `<div class="card row between"><img class="thumb" src="${petThumbLook(t.look)}" alt=""><div class="info"><b>${esc(t.name)}</b><small>${left > 0 ? 'Tedavide · ' + fmt(left) : 'İyileşti! Teslim alabilirsin'}</small></div>
+          ${left > 0 ? `<button class="btn sm" data-adspeed="${t.id}">📺 Hızlandır</button>` : `<div class="col"><button class="btn sm" data-shelter="${t.id}">Barınağa al</button><button class="btn sm ghost" data-release="${t.id}">Sokağa bırak</button></div>`}</div>`; }).join('')
+        : `<div class="empty"><b class="navemo">🤒</b><p>Tedavide dost yok. Haritada üstünde 🤒 olan hasta dostları <b>aracınla</b> buraya getir. Her tedavi ${VET_COIN} jeton + XP kazandırır.</p></div>`}</div>`;
+    } else if (id === 'shelter') {
+      const sh = s.shelter, cap = shelterCap(s), day = dayKey(Date.now());
+      title.innerHTML = `<b class="navemo">🐾</b><span>Barınak</span>`;
+      const nextCost = SHELTER_UPGRADE[sh.level];
+      html = `<div class="list"><div class="card row between"><div class="info"><b>Seviye ${sh.level} · ${sh.animals.length}/${cap} dost</b><small>Her dosta günde mama + su + sevgi ver: ${CARE_COIN} jeton. Her gün uğra!</small></div>
+          ${nextCost !== undefined ? `<button class="btn sm" data-upshelter="1" ${s.coins >= nextCost ? '' : 'disabled'}>Büyüt ${priceHtml({ coin: nextCost })}</button>` : '<span class="chip ok">En büyük</span>'}</div>
+        ${sh.animals.map(a => { const c = a.care.day === day ? a.care : { fed: false, water: false, pet: false, paid: false };
+          return `<div class="card"><div class="row between"><img class="thumb" src="${petThumbLook({ ...a.look, species: a.species }, { wear: a.wear, collar: a.collar })}" alt=""><div class="info"><b>${esc(a.name)}</b><small>${c.paid ? 'Bugünkü bakım tamam ✓' : 'Bakım bekliyor'}</small></div><button class="btn sm ghost" data-rename="${a.uid}">İsim</button></div>
+          <div class="gear"><button class="btn sm ${c.fed ? 'ghost' : ''}" data-care="${a.uid}|fed" ${c.fed ? 'disabled' : ''}>🍖 Mama</button><button class="btn sm ${c.water ? 'ghost' : ''}" data-care="${a.uid}|water" ${c.water ? 'disabled' : ''}>💧 Su</button><button class="btn sm ${c.pet ? 'ghost' : ''}" data-care="${a.uid}|pet" ${c.pet ? 'disabled' : ''}>💛 Sev</button></div>
+          <div class="gear">${ITEMS.filter(i => (i.kind === 'petwear' || i.kind === 'collar') && (s.items[i.id] ?? 0) > 0).map(i => `<button class="gearbtn ${a.wear === i.id || a.collar === i.id ? 'on' : ''}" data-shgear="${a.uid}|${i.id}" title="${i.name}">${itemIcon(i)}</button>`).join('')}</div></div>`; }).join('')}
+        ${!sh.animals.length ? '<div class="empty"><b class="navemo">🏥</b><p>Barınak boş. Veterinerde iyileşen dostları buraya alabilirsin.</p></div>' : ''}
+        <div class="card"><b>Süsler ve oyuncaklar</b><div class="grid">${DECOR.map(d => `<div class="card shopitem"><b>${d.name}</b><small>${d.desc}</small>${sh.decor.includes(d.id) ? '<span class="chip ok">Var</span>' : `<button class="btn" data-decor="${d.id}" ${s.coins >= d.price ? '' : 'disabled'}>${priceHtml({ coin: d.price })}</button>`}</div>`).join('')}</div></div></div>`;
     } else if (id === 'home') {
       title.innerHTML = `${I.home}<span>Ev</span>`;
       html = this.tabs('home', [['wardrobe', 'Gardırop'], ['builds', 'Yuvalarım']]);
@@ -267,6 +299,15 @@ export class Hud {
     const g = this.game, s = g.state;
     const on = (attr: string, fn: (v: string) => void) => root.querySelectorAll<HTMLElement>(`[data-${attr}]`).forEach(el => el.onclick = () => fn(el.dataset[attr.replace(/-./g, m => m[1].toUpperCase())]!));
     on('tab', v => { this.tab[this.sheetOpen!] = v; this.render(); });
+    on('claim', v => { const q = claimQuest(s, v); if (q) { sfx.coin(); save(s); this.sync(); this.toast(`+${q.coins} jeton${q.gems ? ', +' + q.gems + ' elmas' : ''}, +${q.xp} XP`); this.render(); } });
+    on('adspeed', async v => { const ok = await this.ads.showRewarded(); if (ok) { speedUp(s, v, Date.now()); save(s); this.render(); } });
+    on('shelter', v => { const r = discharge(s, v, true, Date.now()); if (!r.ok) { this.toast(r.reason ?? 'Olmadı'); return; } sfx.success(); save(s); this.sync(); g.refreshShelter(); this.toast(`${r.pet!.name} barınağa yerleşti 🐾 (+${VET_COIN} jeton)`); this.render(); });
+    on('release', v => { const t = s.treatments.find(t => t.id === v); const r = discharge(s, v, false, Date.now()); if (!r.ok || !t) { this.toast(r.reason ?? 'Olmadı'); return; } sfx.success(); save(s); this.sync(); g.releaseToStreet(t.name, t.look); this.toast(`${t.name} sokağa sağlıkla döndü (+${VET_COIN} jeton)`); this.render(); });
+    on('care', v => { const [uid, w] = v.split('|'); const r = care(s, uid, w as any, Date.now()); if (r.done) { sfx.pour(); if (r.paid) { sfx.coin(); this.toast(`Tam bakım! +${r.paid} jeton`); } save(s); this.sync(); this.render(); } });
+    on('rename', v => { const a = s.shelter.animals.find(a => a.uid === v); if (!a) return; const n = prompt('Yeni isim', a.name); if (n && n.trim()) { a.name = n.trim().slice(0, 16); save(s); this.render(); } });
+    on('shgear', v => { const [uid, item] = v.split('|'); const a = s.shelter.animals.find(a => a.uid === uid); const it = itemById(item); if (!a || !it) return; if (it.kind === 'collar') a.collar = a.collar === item ? undefined : item; else a.wear = a.wear === item ? undefined : item; save(s); g.refreshShelter(); this.render(); });
+    on('upshelter', () => { if (upgradeShelter(s)) { sfx.success(); save(s); this.sync(); g.refreshShelter(); this.toast('Barınak büyüdü! Yeni bölme eklendi'); this.render(); } });
+    on('decor', v => { if (buyDecor(s, v)) { sfx.success(); save(s); this.sync(); g.refreshShelter(); this.render(); } });
     on('veh', v => { s.garage.active = v; save(s); g.spawnVehicle(); this.render(); this.nearChanged(); });
     on('paint', v => { s.garage.color[s.garage.active] = v; save(s); g.setVehicleLook(); this.render(); });
     on('vacc', v => { const l = (s.garage.acc[s.garage.active] ??= []); const i = l.indexOf(v); if (i >= 0) l.splice(i, 1); else l.push(v); save(s); g.setVehicleLook(); this.render(); });
@@ -305,6 +346,8 @@ export class Hud {
     on('city', v => this.toast(`${CITIES.find(c => c.id === v)!.name} yakında`));
     on('unlock', v => { if (unlockCity(s, v)) { sfx.success(); save(s); this.sync(); } });
   }
+
+  questDot() { const d = document.getElementById('questDot'); if (d) d.classList.toggle('on', claimable(this.game.state) > 0); }
 
   private rebuildPlayer() {
     const g = this.game; const old = g.player.root;

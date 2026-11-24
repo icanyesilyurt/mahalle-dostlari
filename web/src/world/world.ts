@@ -32,6 +32,9 @@ export interface WorldData {
   walkers?: [number, number][][];
   tiles?: Tile[];
   lamps?: [number, number][];
+  vetDoor?: THREE.Vector3;
+  homeDoor?: THREE.Vector3;
+  shelterYard?: { x0: number; x1: number; z0: number; z1: number };
   lampH?: number;
   pigeons?: [number, number][];
   water: Rect[];

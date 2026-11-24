@@ -208,6 +208,13 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   I.add('cami', M(-2, 0, 255), stone);
   I.add('cami_avlu', M(-32.25, 0, 255), stone);
   I.add('ayasofya', M(88, 0, 186), wallTint('#d6a690'));
+  // veteriner + oyuncu evi + barınak (çitli bahçe, giriş güneyde)
+  I.add('veteriner', M(36, 0, 182)); colliders.push({ x: 36, z: 182, hw: 4.3, hd: 3.3 });
+  I.add('oyuncu_evi', M(48, 0, 182), wallTint('#f3d9b0')); colliders.push({ x: 48, z: 182, hw: 3.7, hd: 3.2 });
+  I.add('barinak', M(61, 0, 180), wallTint('#f6e3c4')); colliders.push({ x: 61, z: 180, hw: 6.3, hd: 2.7 });
+  for (let x = 55; x < 68; x += 2) if (x < 59 || x > 63) I.add('cit', M(x, 0, 200));
+  for (let z = 184; z < 200; z += 2) { I.add('cit', M(54, 0, z, Math.PI / 2)); I.add('cit', M(68, 0, z, Math.PI / 2)); }
+  colliders.push({ x: 56.5, z: 200, hw: 2.5, hd: 0.15 }, { x: 65.5, z: 200, hw: 2.5, hd: 0.15 }, { x: 54, z: 191.5, hw: 0.15, hd: 8.5 }, { x: 68, z: 191.5, hw: 0.15, hd: 8.5 });
   I.add('yeni_cami', M(-10, 0, 34, 0, 0.77, 0.77, 0.77), stone);
   I.add('misir_carsisi', M(-91.5, 0, 31), wallTint('#e9d2b0'));
   I.add('galata_kulesi', M(45, 0, -202.5, 0, 1.2, 0.82, 1.2), wallTint('#e3cfae'));
@@ -367,7 +374,7 @@ function squareLayout(D: any, kits: Kits, deco: Merge, R: ReturnType<typeof rng>
     !(D.grounds as any[][]).some(gg => gg[5] === 'grass' && x + w / 2 > gg[0] && x - w / 2 < gg[1] && z + d / 2 > gg[2] && z - d / 2 < gg[3]) &&
     Math.abs(z - fz) > d / 2 + 2.5 && Math.abs(x - fx) > w / 2 + 2.5 && Math.hypot(x - fx, z - fz) > 12;
   const grassMat = new THREE.MeshStandardMaterial({ color: GRASS, roughness: 1 });
-  const cands: [number, number, number, number][] = [[75, 212, 13, 5], [95, 212, 9, 5], [10, 213, 14, 6], [10, 231, 14, 5], [70, 230, 10, 5], [100, 230, 10, 5], [26, 196, 10, 6], [60, 196, 8, 6], [-8, 196, 12, 6]];
+  const cands: [number, number, number, number][] = [[75, 212, 13, 5], [95, 212, 9, 5], [10, 213, 14, 6], [10, 231, 14, 5], [70, 230, 10, 5], [100, 230, 10, 5], [26, 196, 10, 6], [-8, 196, 12, 6]];
   for (const [x, z, w, d] of cands) {
     if (!free(x, z, w, d)) continue;
     const sh = roundRect(w, d, 1.2);

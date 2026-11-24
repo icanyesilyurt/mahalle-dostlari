@@ -24,6 +24,7 @@ async function boot() {
     changed: () => hud.sync(),
     hearts: at => hud.hearts(at),
     nearChanged: () => hud.nearChanged(),
+    open: id => hud.open(id),
   });
   hud.bind(game);
   game.start();

@@ -1,6 +1,8 @@
 // Oyun durumu + kayıt + ekonomi kuralları. Görselden tamamen bağımsız (test edilebilir).
 import { BOXES, BREEDS, ITEMS, Price, Reward, breedById, itemById } from './catalog';
 import { CITIES } from '../world/cities';
+import type { Quest, ShelterPet, Treatment } from './care';
+import { questProgress } from './care';
 
 export const FOOD_MAX = 10;
 export const FOOD_REGEN_MS = 30 * 60 * 1000; // saatte 2 mama
@@ -34,6 +36,10 @@ export interface GameState {
   stats: { fed: number; watered: number; boxes: number; ads: number };
   muted: boolean;
   garage: { active: string; color: Record<string, string>; acc: Record<string, string[]> };
+  xp: number;
+  treatments: Treatment[];
+  shelter: { level: number; decor: string[]; animals: ShelterPet[] };
+  quests: { day: string; list: Quest[] };
 }
 
 export function newState(now: number): GameState {
@@ -43,6 +49,7 @@ export function newState(now: number): GameState {
     look: { outfit: 'tisort_mercan', hat: null, skin: '#f1c7a5', hair: '#4a2f22', gender: 'm', hairStyle: 'dalgali' },
     friends: {}, stats: { fed: 0, watered: 0, boxes: 0, ads: 0 }, muted: false,
     garage: { active: 'bisiklet', color: {}, acc: {} },
+    xp: 0, treatments: [], shelter: { level: 1, decor: [], animals: [] }, quests: { day: '', list: [] },
   };
 }
 
@@ -97,7 +104,7 @@ export function feedStray(s: GameState, id: string, now: number): { ok: boolean;
   if (!useFood(s, now)) return { ok: false, coins: 0, gems: 0, newFriend: false };
   const f = friend(s, id);
   const newFriend = f.fed === 0;
-  f.fed++; s.stats.fed++;
+  f.fed++; s.stats.fed++; questProgress(s, 'feed', 1, now);
   s.coins += FEED_COIN;
   const gems = newFriend ? NEW_FRIEND_GEM : 0;
   s.gems += gems;
@@ -106,14 +113,14 @@ export function feedStray(s: GameState, id: string, now: number): { ok: boolean;
 
 export function waterStray(s: GameState, id: string): { ok: boolean; coins: number } {
   if (s.water <= 0) return { ok: false, coins: 0 };
-  s.water--; friend(s, id).watered++; s.stats.watered++;
+  s.water--; friend(s, id).watered++; s.stats.watered++; questProgress(s, 'water', 1, Date.now());
   s.coins += WATER_COIN;
   return { ok: true, coins: WATER_COIN };
 }
 
 export function petStray(s: GameState, id: string, now: number): number {
   const f = friend(s, id);
-  f.petted++;
+  f.petted++; questProgress(s, 'pet', 1, now);
   if (now - f.lastPet < 60_000) return 0; // dakikada bir ödül
   f.lastPet = now; s.coins += PET_COIN;
   return PET_COIN;
@@ -195,6 +202,7 @@ export function migrate(raw: any, now: number): GameState {
   const s = { ...base, ...raw, look: { ...base.look, ...(raw.look ?? {}) }, stats: { ...base.stats, ...(raw.stats ?? {}) } } as GameState;
   s.v = SAVE_VERSION;
   s.garage = { ...base.garage, ...(raw.garage ?? {}) };
+  s.shelter = { ...base.shelter, ...(raw.shelter ?? {}) };
   s.items = { ...(s.items ?? {}) }; if (!s.items.bisiklet) s.items.bisiklet = 1;   // bisiklet herkese ücretsiz
   // bilinmeyen ırk/ürün kalıntılarını temizle
   s.pets = (s.pets ?? []).filter(p => BREEDS.some(b => b.id === p.breed));

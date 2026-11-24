@@ -1,15 +1,21 @@
 // Pet kartları için küçük 3B önizleme resimleri (bir kez çizilir, önbelleğe alınır).
 import * as THREE from 'three';
 import { Pet } from '../actors/pet';
-import { breedById } from '../core/catalog';
+import { Breed, BreedLook, breedById } from '../core/catalog';
 
 let r: THREE.WebGLRenderer | null = null;
 const cache = new Map<string, string>();
 
-export function petThumb(breedId: string, gear: { wear?: string; collar?: string } = {}): string {
-  const key = `${breedId}|${gear.wear ?? ''}|${gear.collar ?? ''}`;
+/** Görünüm verisinden (sokak hayvanı / barınak dostu) önizleme. */
+export function petThumbLook(look: any, gear: { wear?: string; collar?: string } = {}): string {
+  const b: Breed = { id: 'look', species: look?.species ?? 'cat', name: '', price: {}, look: { size: 1, belly: '#f4efe6', ...look } as BreedLook };
+  return petThumb('', gear, b);
+}
+
+export function petThumb(breedId: string, gear: { wear?: string; collar?: string } = {}, given?: Breed): string {
+  const key = given ? `L${JSON.stringify(given.look)}|${gear.wear ?? ''}|${gear.collar ?? ''}` : `${breedId}|${gear.wear ?? ''}|${gear.collar ?? ''}`;
   if (cache.has(key)) return cache.get(key)!;
-  const b = breedById(breedId); if (!b) return '';
+  const b = given ?? breedById(breedId); if (!b) return '';
   if (!r) {
     const c = document.createElement('canvas'); c.width = c.height = 192;
     r = new THREE.WebGLRenderer({ canvas: c, alpha: true, antialias: true, preserveDrawingBuffer: true });
