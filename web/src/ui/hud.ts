@@ -252,13 +252,13 @@ export class Hud {
           ${left > 0 ? `<button class="btn sm" data-adspeed="${t.id}">📺 Hızlandır</button>` : `<div class="col"><button class="btn sm" data-shelter="${t.id}">Barınağa al</button><button class="btn sm ghost" data-release="${t.id}">Sokağa bırak</button></div>`}</div>`; }).join('')
         : `<div class="empty"><b class="navemo">🤒</b><p>Tedavide dost yok. Haritada üstünde 🤒 olan hasta dostları <b>aracınla</b> buraya getir. Her tedavi ${VET_COIN} jeton + XP kazandırır.</p></div>`}</div>`;
     } else if (id === 'shelter') {
-      const sh = s.shelter, cap = shelterCap(s), day = dayKey(Date.now());
+      const sh = s.shelter, cap = shelterCap(s), day = dayKey(Date.now()); const g = this.game;
       title.innerHTML = `<b class="navemo">🐾</b><span>Barınak</span>`;
       const nextCost = SHELTER_UPGRADE[sh.level];
       html = `<div class="list"><div class="card row between"><div class="info"><b>Seviye ${sh.level} · ${sh.animals.length}/${cap} dost</b><small>Her dosta günde mama + su + sevgi ver: ${CARE_COIN} jeton. Her gün uğra!</small></div>
           ${nextCost !== undefined ? `<button class="btn sm" data-upshelter="1" ${s.coins >= nextCost ? '' : 'disabled'}>Büyüt ${priceHtml({ coin: nextCost })}</button>` : '<span class="chip ok">En büyük</span>'}</div>
         ${sh.animals.map(a => { const c = a.care.day === day ? a.care : { fed: false, water: false, pet: false, paid: false };
-          return `<div class="card"><div class="row between"><img class="thumb" src="${petThumbLook({ ...a.look, species: a.species }, { wear: a.wear, collar: a.collar })}" alt=""><div class="info"><b>${esc(a.name)}</b><small>${c.paid ? 'Bugünkü bakım tamam ✓' : 'Bakım bekliyor'}</small></div><button class="btn sm ghost" data-rename="${a.uid}">İsim</button></div>
+          return `<div class="card"><div class="row between"><img class="thumb" src="${petThumbLook({ ...a.look, species: a.species }, { wear: a.wear, collar: a.collar })}" alt=""><div class="info"><b>${esc(a.name)}</b><small>${c.paid ? 'Bugünkü bakım tamam ✓' : 'Bakım bekliyor'}</small></div><button class="btn sm ghost" data-rename="${a.uid}">İsim</button>${g.walking?.uid === a.uid ? `<button class="btn sm" data-walkend="1">Bitir</button>` : `<button class="btn sm" data-walk="${a.uid}">🦮 Gezdir</button>`}</div>
           <div class="gear"><button class="btn sm ${c.fed ? 'ghost' : ''}" data-care="${a.uid}|fed" ${c.fed ? 'disabled' : ''}>🍖 Mama</button><button class="btn sm ${c.water ? 'ghost' : ''}" data-care="${a.uid}|water" ${c.water ? 'disabled' : ''}>💧 Su</button><button class="btn sm ${c.pet ? 'ghost' : ''}" data-care="${a.uid}|pet" ${c.pet ? 'disabled' : ''}>💛 Sev</button></div>
           <div class="gear">${ITEMS.filter(i => (i.kind === 'petwear' || i.kind === 'collar') && (s.items[i.id] ?? 0) > 0).map(i => `<button class="gearbtn ${a.wear === i.id || a.collar === i.id ? 'on' : ''}" data-shgear="${a.uid}|${i.id}" title="${i.name}">${itemIcon(i)}</button>`).join('')}</div></div>`; }).join('')}
         ${!sh.animals.length ? '<div class="empty"><b class="navemo">🏥</b><p>Barınak boş. Veterinerde iyileşen dostları buraya alabilirsin.</p></div>' : ''}
@@ -309,6 +309,8 @@ export class Hud {
     on('rename', v => { const a = s.shelter.animals.find(a => a.uid === v); if (!a) return; const n = prompt('Yeni isim', a.name); if (n && n.trim()) { a.name = n.trim().slice(0, 16); save(s); this.render(); } });
     on('shgear', v => { const [uid, item] = v.split('|'); const a = s.shelter.animals.find(a => a.uid === uid); const it = itemById(item); if (!a || !it) return; if (it.kind === 'collar') a.collar = a.collar === item ? undefined : item; else a.wear = a.wear === item ? undefined : item; save(s); g.refreshShelter(); this.render(); });
     on('upshelter', () => { if (upgradeShelter(s)) { sfx.success(); save(s); this.sync(); g.refreshShelter(); this.toast('Barınak büyüdü! Yeni bölme eklendi'); this.render(); } });
+    on('walk', v => { g.startWalk(v); this.close(); });
+    on('walkend', () => { g.endWalk(); this.render(); });
     on('decor', v => { if (buyDecor(s, v)) { sfx.success(); save(s); this.sync(); g.refreshShelter(); this.render(); } });
     on('veh', v => { s.garage.active = v; save(s); g.spawnVehicle(); this.render(); this.nearChanged(); });
     on('paint', v => { s.garage.color[s.garage.active] = v; save(s); g.setVehicleLook(); this.render(); });

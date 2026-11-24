@@ -17,7 +17,7 @@ export interface ShelterPet {
   care: { day: string; fed: boolean; water: boolean; pet: boolean; paid: boolean };
 }
 export interface Treatment { id: string; name: string; look: any; readyAt: number }
-export type QuestKind = 'feed' | 'water' | 'pet' | 'vet' | 'care' | 'ride';
+export type QuestKind = 'feed' | 'water' | 'pet' | 'vet' | 'care' | 'ride' | 'walk';
 export interface Quest { id: string; kind: QuestKind; text: string; target: number; progress: number; coins: number; gems: number; xp: number; claimed: boolean }
 
 export const dayKey = (now: number) => { const d = new Date(now); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
@@ -32,6 +32,7 @@ const POOL: Omit<Quest, 'id' | 'progress' | 'claimed'>[] = [
   { kind: 'pet', text: '5 kez bir dostu sev', target: 5, coins: 30, gems: 0, xp: 10 },
   { kind: 'care', text: 'Barınakta 2 dosta tam bakım yap', target: 2, coins: 60, gems: 0, xp: 15 },
   { kind: 'ride', text: 'Araçla 500 m yol git', target: 500, coins: 50, gems: 0, xp: 10 },
+  { kind: 'walk', text: 'Barınaktan bir dostu 200 m gezdir', target: 200, coins: 50, gems: 0, xp: 15 },
 ];
 
 /** Gün değiştiyse yeni 3 görev: besleme + veteriner + günün değişen üçüncüsü. */
@@ -88,6 +89,14 @@ export function care(s: GameState, uid: string, what: 'fed' | 'water' | 'pet', n
   return { done: true, paid: 0 };
 }
 export const needsCare = (p: ShelterPet, now: number) => p.care.day !== dayKey(now) || !p.care.paid;
+/** Gezinti bitti: her 100 m için 5 jeton (en çok 30), gezinti sevgi bakımı sayılır. */
+export function finishWalk(s: GameState, uid: string, meters: number, now: number): number {
+  const coins = Math.min(30, Math.floor(meters / 100) * 5);
+  s.coins += coins; s.xp += Math.min(10, Math.floor(meters / 50));
+  if (meters >= 30) care(s, uid, 'pet', now);
+  return coins;
+}
+
 export function upgradeShelter(s: GameState): boolean {
   const next = s.shelter.level; const cost = SHELTER_UPGRADE[next];
   if (cost === undefined || s.coins < cost) return false;

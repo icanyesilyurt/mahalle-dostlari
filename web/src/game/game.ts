@@ -14,7 +14,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { setMultiDraw, wallTint } from '../world/assets';
 import { NIGHT, dayState, hourNow, skyMaterial } from './daycycle';
 import { VEHICLE_DEFS, Vehicle } from './vehicles';
-import { admit, ensureQuests, questProgress, DECOR } from '../core/care';
+import { admit, ensureQuests, finishWalk, questProgress } from '../core/care';
 import { petHouse as petHouseModel } from '../world/pethouse';
 import type { StraySpawn } from '../world/world';
 import { CITY_BUILDERS, WorldData, blocked, collide, getKits, makeMaterials, onLand } from '../world/world';
@@ -40,7 +40,7 @@ export interface GameEvents {
   open?(id: string): void;
 }
 
-export type SpotKind = 'carry' | 'drop' | 'vet' | 'shelter' | 'home';
+export type SpotKind = 'carry' | 'drop' | 'vet' | 'shelter' | 'home' | 'walkend';
 
 const now = () => Date.now();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -88,6 +88,8 @@ export class Game {
   private shelterGroup = new THREE.Group();
   private shelterPets: { pet: Pet; target: THREE.Vector3 | null; t: number; yaw: number }[] = [];
   private rideMeters = 0;
+  /** Barınaktan gezdirilen dost (tasmalı). */
+  walking: { uid: string; name: string; pet: Pet; yaw: number; meters: number; acc: number; leash: THREE.Mesh } | null = null;
   private trams: { mesh: THREE.InstancedMesh; pts: THREE.Vector3[]; len: number; s: number; dir: number; speed: number }[] = [];
   private walkers: { h: Human; path: THREE.Vector3[]; i: number; sp: number }[] = [];
   private pigeons: { im: THREE.InstancedMesh; b: { home: THREE.Vector3; p: THREE.Vector3; v: THREE.Vector3; yaw: number; air: number; t: number }[] } | null = null;
@@ -458,7 +460,7 @@ export class Game {
     } else if (!this.riding) {
       if (this.world.vetDoor && this.pos.distanceTo(this.world.vetDoor) < 6) sp = { kind: 'vet', label: 'Veteriner', icon: '🏥' };
       else if (this.world.homeDoor && this.pos.distanceTo(this.world.homeDoor) < 4.5) sp = { kind: 'home', label: 'Evim', icon: '🏡' };
-      else if (this.world.shelterYard) { const y = this.world.shelterYard; if (this.pos.x > y.x0 - 2 && this.pos.x < y.x1 + 2 && this.pos.z > y.z0 - 2 && this.pos.z < y.z1 + 3) sp = { kind: 'shelter', label: 'Barınak', icon: '🐾' }; }
+      else if (this.world.shelterYard) { const y = this.world.shelterYard; if (this.pos.x > y.x0 - 2 && this.pos.x < y.x1 + 2 && this.pos.z > y.z0 - 2 && this.pos.z < y.z1 + 3) sp = this.walking ? { kind: 'walkend', label: 'Barınağa bırak', icon: '🦮' } : { kind: 'shelter', label: 'Barınak', icon: '🐾' }; }
     }
     if ((sp?.kind ?? null) !== (this.spot?.kind ?? null)) { this.spot = sp; this.ev.nearChanged(); } else this.spot = sp;
   }
@@ -485,7 +487,8 @@ export class Game {
       sfx.success(); save(this.state); this.ev.changed();
       this.ev.toast(`${n} dost tedaviye alındı. Veteriner panelinden takip et`);
       this.ev.open?.('vet');
-    } else this.ev.open?.(sp.kind);
+    } else if (sp.kind === 'walkend') this.endWalk();
+    else this.ev.open?.(sp.kind);
     this.ev.nearChanged();
   }
 
@@ -509,6 +512,7 @@ export class Game {
     }
     if (sh.decor.includes('dekor_oyuncak')) for (let i = 0; i < 5; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshStandardMaterial({ color: ['#e2493b', '#f2c94c', '#3b8ed6', '#9a5ac8', '#5aa055'][i], roughness: 0.4 })); b.position.set(y.x0 + 3 + i * 1.9, 0.12, y.z1 - 2 - (i % 2) * 2); this.shelterGroup.add(b); }
     sh.animals.forEach((a, i) => {
+      if (this.walking?.uid === a.uid) return;
       const breed: Breed = { id: a.uid, species: a.species, name: a.name, price: {}, look: { size: 1, belly: '#f4efe6', ...a.look } as BreedLook };
       const pet = new Pet(breed, i + 5, { wear: a.wear, collar: a.collar });
       pet.root.position.set(y.x0 + 2 + (i % 4) * 2.8, 0, y.z0 + 5 + Math.floor(i / 4) * 3);
@@ -525,6 +529,49 @@ export class Game {
       if (s.target) { if (this.walkTo(s.pet, s, s.target, 0.9, dt, 0.3)) s.target = null; } else s.pet.speed *= 0.85;
       s.pet.root.rotation.y = s.yaw; s.pet.update(dt);
     }
+  }
+
+  // ---------- barınaktan gezdirme ----------
+  startWalk(uid: string) {
+    if (this.walking) this.endWalk();
+    const a = this.state.shelter.animals.find(a => a.uid === uid); if (!a) return;
+    const breed: Breed = { id: a.uid, species: a.species, name: a.name, price: {}, look: { size: 1, belly: '#f4efe6', ...a.look } as BreedLook };
+    const pet = new Pet(breed, 17, { wear: a.wear, collar: a.collar ?? 'tasma_mavi' });
+    pet.root.position.copy(this.pos).add(new THREE.Vector3(0.8, 0, 0.8)); this.scene.add(pet.root);
+    const leash = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 5), new THREE.MeshStandardMaterial({ color: '#c8423a', roughness: 0.6 }));
+    leash.frustumCulled = false; this.scene.add(leash);
+    this.walking = { uid, name: a.name, pet, yaw: 0, meters: 0, acc: 0, leash };
+    this.refreshShelter();
+    this.ev.toast(`${a.name} tasmasını taktı, hadi gezmeye! 🦮`); this.ev.nearChanged();
+  }
+  endWalk() {
+    const w = this.walking; if (!w) return;
+    this.scene.remove(w.pet.root); this.scene.remove(w.leash);
+    const coins = finishWalk(this.state, w.uid, w.meters, now());
+    this.walking = null; this.refreshShelter(); save(this.state); this.ev.changed();
+    this.ev.toast(`${w.name} barınağa döndü · ${Math.round(w.meters)} m${coins ? ' · +' + coins + ' jeton' : ''}`); this.ev.nearChanged();
+  }
+  private updateWalk(dt: number) {
+    const w = this.walking; if (!w) return;
+    const p = w.pet;
+    const lead = this.riding && this.vehicle ? this.vehicle.root.position : this.pos;
+    const behind = lead.clone().add(new THREE.Vector3(Math.sin(this.yaw + 2.2), 0, Math.cos(this.yaw + 2.2)).multiplyScalar(1.2));
+    const d = p.root.position.distanceTo(lead);
+    if (d > 18) p.root.position.copy(behind);
+    const before = p.root.position.clone();
+    if (this.walkTo(p, w, behind, d > 4 ? 5.2 : d > 1.8 ? 3.4 : 1.6, dt, 0.45)) p.setPose(this.player.speed < 0.2 ? 'sit' : 'stand'); else p.setPose('stand');
+    p.root.rotation.y = w.yaw; p.wag = 0.7; p.update(dt);
+    const moved = p.root.position.distanceTo(before);
+    w.meters += moved; w.acc += moved;
+    if (w.acc >= 10) { questProgress(this.state, 'walk', Math.floor(w.acc), now()); w.acc = 0; }
+    // tasma: oyuncunun elinden dostun boynuna
+    const hand = new THREE.Vector3(); this.player.hand.getWorldPosition(hand);
+    if (!this.player.root.visible || this.riding) hand.copy(lead).setY(1.0);
+    const neck = p.root.position.clone().setY(p.height * 0.7);
+    const mid = hand.clone().add(neck).multiplyScalar(0.5).setY(Math.min(hand.y, neck.y) + Math.abs(hand.y - neck.y) * 0.5 - 0.05);
+    const dir = neck.clone().sub(hand); const len = dir.length();
+    w.leash.position.copy(mid); w.leash.scale.set(1, len, 1);
+    w.leash.quaternion.setFromUnitVectors(UP, dir.normalize());
   }
 
   // ---------- tramvay: raylarda yavaşça gidip gelir; önünde oyuncu/araç varsa durur, içinden geçilmez ----------
@@ -795,6 +842,7 @@ export class Game {
     this.updateSpot();
     this.updateShelter(dt);
     this.updateTrams(dt);
+    this.updateWalk(dt);
     this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
