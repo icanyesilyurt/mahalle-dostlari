@@ -3,6 +3,7 @@
 // Evlerin yeri, eni, derinliği, yönü, kat sayısı, rengi, dükkan olup olmadığı eskisiyle aynı;
 // yalnız görünüş yeni stilde (pencere dokuları, cumba, balkon, tente, kiremit çatı).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import DATA from './data/istanbul.json';
 import { Batch, M, TEX, blob, hipRoof, rng } from './kit';
 import { bench, ferry, lamp, laundryLine } from './props';
@@ -181,6 +182,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   const tileFor: Record<string, number> = { cobble: 4, slab: 4, grass: 5, wood: 2 };
   const layer: Record<string, number> = { cobble: 0, slab: 1, grass: 2, wood: 3 };
   const groundMats = new Map<string, THREE.MeshLambertMaterial>();
+  const groundGeos = new Map<string, THREE.BufferGeometry[]>();
   for (const [x0, x1, z0, z1, y, key, col] of D.grounds as [number, number, number, number, number, string, string][]) {
     const L = layer[key] ?? 1, mk = key + col;
     if (!groundMats.has(mk) && kits) {
@@ -201,10 +203,11 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     const geo = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
     const uv = geo.attributes.uv as THREE.BufferAttribute, p = geo.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, p.getX(i) + (x0 + x1) / 2, -p.getY(i) + (z0 + z1) / 2);
-    const m = new THREE.Mesh(geo, groundMats.get(mk)!);
-    m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, y + L * 0.012, (z0 + z1) / 2); m.receiveShadow = true;
-    root.add(m);
+    // aynı malzemeli zemin parçaları tek mesh (çizim çağrısı tasarrufu)
+    geo.rotateX(-Math.PI / 2); geo.translate((x0 + x1) / 2, y + L * 0.012, (z0 + z1) / 2);
+    let list = groundGeos.get(mk); if (!list) groundGeos.set(mk, list = []); list.push(geo);
   }
+  for (const [mk, list] of groundGeos) { const m = new THREE.Mesh(mergeGeometries(list)!, groundMats.get(mk)!); m.receiveShadow = true; root.add(m); }
 
   for (const h of D.houses as House[]) if (!kits || !inShowcase(h[0], h[1])) oldHouse(b, h, R);
 
@@ -230,7 +233,9 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   for (const [x, z] of D.lamps as number[][]) if (!kits || !inShowcase(x, z)) lamp(b, x, z, 1.4);
   for (const [x, z, ry] of D.benches as number[][]) if (!kits || !inShowcase(x, z)) bench(b, x, z, ry);
   let fountainR = 3.2;
+  const ts = performance.now();
   const sc = kits ? buildShowcase(D, kits, !lowEnd) : null;
+  ((window as any).__prof ??= {}).showcase = Math.round(performance.now() - ts);
   if (sc) { root.add(sc.group); colliders.push(...sc.colliders); fountainR = sc.fountainR; }
 
   // su

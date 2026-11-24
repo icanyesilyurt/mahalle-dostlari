@@ -14,10 +14,11 @@ async function boot() {
   if (import.meta.env.VITE_SHOWCASE !== '0') { // yeni görünüm (hazır modeller) artık varsayılan
     msg.textContent = 'Sokaklar kuruluyor…';
     const { loadKits } = await import('./world/assets');
-    setKits(await loadKits());
+    const tk = performance.now(); setKits(await loadKits()); (window as any).__prof = { kits: Math.round(performance.now() - tk) };
   }
   msg.textContent = 'Kediler sokağa çıkıyor…';
   await new Promise(r => setTimeout(r, 30));
+  const tg = performance.now();
   const game = new Game(document.getElementById('c') as HTMLCanvasElement, state, input, {
     reward: (c, g, at) => hud.reward(c, g, at),
     toast: m => hud.toast(m),
@@ -26,6 +27,7 @@ async function boot() {
     nearChanged: () => hud.nearChanged(),
     open: id => hud.open(id),
   });
+  ((window as any).__prof ??= {}).game = Math.round(performance.now() - tg);
   hud.bind(game);
   game.start();
   (window as any).__game = game; // hata ayıklama

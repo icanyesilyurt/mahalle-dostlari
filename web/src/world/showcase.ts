@@ -51,18 +51,37 @@ const AWN = ['#c8423a', '#2f7d6d', '#e2a33b', '#3b6aa8', '#8e3b5a'];
 const ROOF = ['#c9694a', '#b95c3f', '#c87452', '#b3654a'];
 
 // ---------- birleşik geometri yardımcıları (çatı, silme, tente: her biri tek çizim) ----------
+/** Birleşik geometri toplayıcı: kaynak geometri bir kez düz diziye açılır, her ekleme dönüştürülüp doğrudan yazılır. */
+const SRC = new WeakMap<THREE.BufferGeometry, { p: Float32Array; n: Float32Array; uv: Float32Array }>();
+function flat(g: THREE.BufferGeometry) {
+  let f = SRC.get(g); if (f) return f;
+  const x = g.index ? g.toNonIndexed() : g; if (!x.attributes.normal) x.computeVertexNormals();
+  const c = x.attributes.position.count;
+  f = { p: Float32Array.from(x.attributes.position.array as ArrayLike<number>), n: Float32Array.from(x.attributes.normal.array as ArrayLike<number>), uv: x.attributes.uv ? Float32Array.from(x.attributes.uv.array as ArrayLike<number>) : new Float32Array(c * 2) };
+  SRC.set(g, f); return f;
+}
 class Merge {
-  parts: THREE.BufferGeometry[] = [];
+  private p: number[] = []; private n: number[] = []; private uv: number[] = []; private c: number[] = [];
+  private nm = new THREE.Matrix3(); private v = new THREE.Vector3(); private col = new THREE.Color();
   add(g: THREE.BufferGeometry, color: THREE.ColorRepresentation, m: THREE.Matrix4) {
-    const x = (g.index ? g.toNonIndexed() : g.clone()).applyMatrix4(m);
-    const c = new THREE.Color(color), n = x.attributes.position.count, arr = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
-    x.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-    if (!x.attributes.uv) x.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
-    this.parts.push(x);
+    const f = flat(g), e = m.elements; this.nm.getNormalMatrix(m); const ne = this.nm.elements;
+    this.col.set(color); const r = this.col.r, gg = this.col.g, bb = this.col.b;
+    for (let i = 0; i < f.p.length; i += 3) {
+      const x = f.p[i], y = f.p[i + 1], z = f.p[i + 2];
+      this.p.push(e[0] * x + e[4] * y + e[8] * z + e[12], e[1] * x + e[5] * y + e[9] * z + e[13], e[2] * x + e[6] * y + e[10] * z + e[14]);
+      const nx = f.n[i], ny = f.n[i + 1], nz = f.n[i + 2];
+      this.v.set(ne[0] * nx + ne[3] * ny + ne[6] * nz, ne[1] * nx + ne[4] * ny + ne[7] * nz, ne[2] * nx + ne[5] * ny + ne[8] * nz).normalize();
+      this.n.push(this.v.x, this.v.y, this.v.z); this.c.push(r, gg, bb);
+    }
+    for (let i = 0; i < f.uv.length; i++) this.uv.push(f.uv[i]);
   }
+  get empty() { return this.p.length === 0; }
   mesh(mat: THREE.Material, shadows: boolean) {
-    const m = new THREE.Mesh(mergeGeometries(this.parts)!, mat); m.castShadow = shadows; m.receiveShadow = true; return m;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2)); geo.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
+    geo.computeBoundingSphere();
+    const m = new THREE.Mesh(geo, mat); m.castShadow = shadows; m.receiveShadow = true; return m;
   }
 }
 

@@ -3,6 +3,7 @@
 // Eklem hiyerarşisi + kodla animasyon (yürü, dur, eğil-mama koy, sev, top at, el salla, otur).
 import * as THREE from 'three';
 import { itemById } from '../core/catalog';
+import { mergeStatic } from './merge';
 
 export type Action = 'kneel' | 'pet' | 'throw' | 'wave' | null;
 export type Gender = 'm' | 'f';
@@ -206,6 +207,7 @@ export class Human {
     this.buildHair(look.hairStyle ?? (look.gender === 'f' ? 'uzun' : 'kisa'));
     this.buildClothes();
     this.setHat(look.hat);
+    mergeStatic(this.root);
   }
 
   setHat(id: string | null) {

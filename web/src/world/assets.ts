@@ -74,7 +74,8 @@ export async function loadKits(base = './assets/'): Promise<Kits> {
     pair('yol_s'), pair('meydan_s'), pair('plaka_s'), pair('kiremit'),
   ]);
   const map = new Map<string, KitAsset>();
-  const take = (gltf: { scene: THREE.Group }, shared: THREE.Material | null) => {
+  /** bake: çok malzemeli modelin renklerini köşe rengine gömüp tek ortak malzeme kullan (tek çizim çağrısı). */
+  const take = (gltf: { scene: THREE.Group }, shared: THREE.Material | null, bake?: THREE.Material) => {
     gltf.scene.updateMatrixWorld(true);
     for (const node of gltf.scene.children) {
       const geos: THREE.BufferGeometry[] = []; const mats: THREE.Material[] = [];
@@ -89,19 +90,20 @@ export async function loadKits(base = './assets/'): Promise<Kits> {
           if (/grass|plant/i.test(mt.name)) mt.color.set('#5f9e46');
         }
         mats.push(shared ?? mt);
+        if (bake) { const n = g.attributes.position.count, arr = new Float32Array(n * 3); for (let i = 0; i < n; i++) { arr[i * 3] = mt.color.r; arr[i * 3 + 1] = mt.color.g; arr[i * 3 + 2] = mt.color.b; } g.setAttribute('color', new THREE.BufferAttribute(arr, 3)); }
       });
       if (!geos.length) continue;
       const keys = Object.keys(geos[0].attributes).filter(k => geos.every(g => g.attributes[k]));
       for (const g of geos) for (const k of Object.keys(g.attributes)) if (!keys.includes(k)) g.deleteAttribute(k);
-      const geo = mergeGeometries(geos, !shared)!;
+      const geo = mergeGeometries(geos, !shared && !bake)!;
       geo.computeBoundingBox();
-      map.set(node.name, { geo, mat: shared ?? mats, size: geo.boundingBox!.getSize(new THREE.Vector3()) });
+      map.set(node.name, { geo, mat: bake ?? shared ?? mats, size: geo.boundingBox!.getSize(new THREE.Vector3()) });
     }
   };
   const firstMap = (g: { scene: THREE.Group }) => { let t: THREE.Texture | null = null; g.scene.traverse(o => { const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (m?.map && !t) t = m.map; }); return t!; };
   take(mb, wallTintMaterial(firstMap(mb), true));
   take(ft, wallTintMaterial(firstMap(ft)));
-  take(nk, null);
+  take(nk, null, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 }));
   return {
     get: (n: string) => { const a = map.get(n); if (!a) throw new Error('asset yok: ' + n); return a; },
     has: (n: string) => map.has(n),

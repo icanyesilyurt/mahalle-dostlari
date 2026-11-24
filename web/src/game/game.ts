@@ -112,6 +112,12 @@ export class Game {
   private gtao: GTAOPass | null = null;
   private bloom: UnrealBloomPass | null = null;
   gfx = { ao: true, bloom: true };
+  /** Kalite: yüksek (AO+bloom+gölge), orta (AO yok), düşük (son işlem ve gölge yok, kısa görüş). Zayıf cihazda otomatik düşer. */
+  quality: 'high' | 'mid' | 'low' = 'mid';
+  private qAuto = true;
+  private qMeasure = { t: -2.5, frames: 0 };
+  viewDist = 110;
+  private lodNear = 75;
 
   constructor(private canvas: HTMLCanvasElement, public state: GameState, public input: Input, private ev: GameEvents) {
     this.lowEnd = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600;
@@ -157,7 +163,8 @@ export class Game {
   }
 
   private setupPost() {
-    try { const g = JSON.parse(localStorage.getItem('md-gfx') || 'null'); if (g) this.gfx = { ...this.gfx, ...g }; else this.gfx.ao = !this.lowEnd; } catch { this.gfx.ao = !this.lowEnd; }
+    this.quality = this.lowEnd ? 'mid' : 'high';
+    try { const g = JSON.parse(localStorage.getItem('md-gfx') || 'null'); if (g?.quality) { this.quality = g.quality; this.qAuto = g.auto !== false; } } catch { /* */ }
     const s = this.renderer.getDrawingBufferSize(new THREE.Vector2());
     const rt = new THREE.WebGLRenderTarget(s.x, s.y, { type: THREE.HalfFloatType, samples: this.lowEnd ? 0 : 4 });
     const c = new EffectComposer(this.renderer, rt);
@@ -171,23 +178,56 @@ export class Game {
     c.addPass(bl);
     c.addPass(new OutputPass());
     this.composer = c; this.gtao = ao; this.bloom = bl;
-    this.applyGfx();
-    // üst çubukta AO düğmesi
-    const b = document.createElement('button'); b.className = 'iconbtn gfx'; b.id = 'gfxBtn'; b.setAttribute('aria-label', 'Ortam gölgesi');
-    b.onclick = () => { this.gfx.ao = !this.gfx.ao; this.applyGfx(); try { localStorage.setItem('md-gfx', JSON.stringify(this.gfx)); } catch { /* */ } this.ev.toast(this.gfx.ao ? 'Ortam gölgesi açık (daha güzel)' : 'Ortam gölgesi kapalı (daha hızlı)'); };
+    // üst çubukta kalite düğmesi (Y/O/D)
+    const b = document.createElement('button'); b.className = 'iconbtn gfx'; b.id = 'gfxBtn'; b.setAttribute('aria-label', 'Grafik kalitesi');
+    b.onclick = () => { this.setQuality(this.quality === 'high' ? 'mid' : this.quality === 'mid' ? 'low' : 'high', false); this.ev.toast(`Grafik: ${({ high: 'Yüksek (en güzel)', mid: 'Orta', low: 'Düşük (en hızlı)' } as const)[this.quality]}`); };
     document.getElementById('muteBtn')?.before(b);
-    this.applyGfx();
+    this.setQuality(this.quality, this.qAuto);
   }
 
   private applyGfx() {
     if (this.gtao) this.gtao.enabled = this.gfx.ao;
     if (this.bloom) this.bloom.enabled = this.gfx.bloom;
-    const b = document.getElementById('gfxBtn'); if (b) { b.textContent = 'AO'; b.classList.toggle('off', !this.gfx.ao); }
+    const b = document.getElementById('gfxBtn'); if (b) { b.textContent = ({ high: 'Y', mid: 'O', low: 'D' } as const)[this.quality]; b.classList.remove('off'); }
+  }
+
+  setQuality(q: 'high' | 'mid' | 'low', auto: boolean) {
+    const was = this.quality; this.quality = q; this.qAuto = auto;
+    try { localStorage.setItem('md-gfx', JSON.stringify({ quality: q, auto })); } catch { /* */ }
+    const low = q === 'low';
+    this.gfx.ao = q === 'high'; this.gfx.bloom = !low;
+    const sh = !low;
+    if (this.renderer.shadowMap.enabled !== sh) { this.renderer.shadowMap.enabled = sh; this.scene.traverse(o => { const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined; if (m) (Array.isArray(m) ? m : [m]).forEach(x => x.needsUpdate = true); }); }
+    this.sun.castShadow = sh;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, low ? 1 : q === 'mid' ? 1.5 : this.lowEnd ? 1.6 : 2));
+    const fog = this.scene.fog as THREE.Fog; fog.near = low ? 35 : 70; fog.far = low ? 128 : 260;
+    this.camera.far = low ? 138 : 275; this.camera.updateProjectionMatrix();
+    this.sky.scale.setScalar(low ? 0.5 : 1);
+    this.viewDist = low ? 38 : 110; this.lodNear = low ? 35 : 75;
+    this.scene.traverse(o => { if ((o as any).isBatchedMesh) (o as THREE.BatchedMesh).perObjectFrustumCulled = !low; });
+    this.resize();
+    this.applyGfx();
+    if (was !== q) this.qMeasure = { t: -1.5, frames: 0 };
+  }
+
+  /** İlk saniyelerde FPS ölç; 30'un altındaysa kaliteyi bir kademe düşür (kullanıcı elle seçtiyse dokunma). */
+  private autoQuality(dt: number) {
+    if (!this.qAuto || this.quality === 'low' || this.paused) return;
+    const m = this.qMeasure; m.t += dt;
+    if (m.t < 0) return;
+    m.frames++;
+    if (m.t >= 4) {
+      const fps = m.frames / m.t;
+      if (fps < 30) { this.setQuality(this.quality === 'high' ? 'mid' : 'low', true); this.ev.toast('Telefonuna göre grafik ayarlandı (daha akıcı)'); }
+      else this.qAuto = false;
+    }
   }
 
   loadCity(id: string) {
     const mats = makeMaterials();
+    const tw = performance.now();
     this.world = CITY_BUILDERS[id](mats, this.lowEnd, getKits());
+    ((window as any).__prof ??= {}).world = Math.round(performance.now() - tw);
     this.scene.add(this.world.root);
     this.pos.copy(this.world.spawn); this.yaw = this.world.spawnYaw; this.camYaw = this.yaw;
     this.camTarget.copy(this.pos);  // kamera ilk karede doğrudan oyuncunun arkasında (haritayı boydan boya kaymasın)
@@ -415,8 +455,8 @@ export class Game {
   start() {
     const loop = () => {
       requestAnimationFrame(loop);
-      const dt = Math.min(0.05, this.clock.getDelta());
-      if (!this.paused) this.update(dt);
+      const rdt = this.clock.getDelta(); const dt = Math.min(0.05, rdt);
+      if (!this.paused) { this.update(dt); this.autoQuality(rdt); }
       this.draw();
     };
     loop();
@@ -740,7 +780,7 @@ export class Game {
     const c = this.camera.position;
     for (const k of T) {
       const dx = Math.max(0, Math.abs(c.x - k.cx) - k.half), dz = Math.max(0, Math.abs(c.z - k.cz) - k.half);
-      const d = Math.hypot(dx, dz), near = k.near ? d < 85 : d < 75;
+      const d = Math.hypot(dx, dz), near = k.near ? d < this.lodNear + 10 : d < this.lodNear;
       if (near !== k.near) { k.near = near; k.detail.visible = near; k.lod.visible = !near; }
     }
   }
@@ -748,7 +788,7 @@ export class Game {
   private updateWalkers(dt: number) {
     for (const w of this.walkers) {
       const r = w.h.root, tgt = w.path[w.i];
-      const far = r.position.distanceTo(this.pos) > 120;
+      const far = r.position.distanceTo(this.pos) > this.viewDist + 10;
       r.visible = !far;
       const d = tgt.clone().sub(r.position); d.y = 0;
       const L = d.length();
@@ -788,7 +828,7 @@ export class Game {
     P.im.instanceMatrix.needsUpdate = true;
   }
 
-  draw() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
+  draw() { if (this.composer && this.quality !== 'low') this.composer.render(); else this.renderer.render(this.scene, this.camera); }
 
   private update(dt: number) {
     const inp = this.input.poll();
@@ -843,7 +883,7 @@ export class Game {
       this.player.root.rotation.y += ry * Math.min(1, dt * 14);
     }
     this.player.update(dt);
-    for (const n of this.npcs) n.update(dt);
+    for (const n of this.npcs) if (n.root.visible) n.update(dt);
     this.updateWalkers(dt);
     this.updateTiles();
     this.updateDay(dt);
@@ -860,7 +900,7 @@ export class Game {
       if (y && this.shelterPets.length) { this.shelterSoundT -= dt; if (this.shelterSoundT < 0) { this.shelterSoundT = 6 + Math.random() * 8; if (Math.hypot(this.pos.x - (y.x0 + y.x1) / 2, this.pos.z - (y.z0 + y.z1) / 2) < 22) { const sp = this.shelterPets[Math.floor(Math.random() * this.shelterPets.length)]; sfx.happy(sp.pet.cat); sp.pet.react(); } } }
     }
     this.updatePigeons(dt, t);
-    for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
+    for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < this.viewDist;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
 
     // dünya canlıları
@@ -1015,7 +1055,7 @@ export class Game {
       if (s.carried) { p.speed = 0; p.update(dt); continue; }
       const dPlayer = p.root.position.distanceTo(this.pos);
       const hungry = s.hungryAt <= tnow;
-      if (dPlayer > 110) { p.root.visible = false; continue; } // sis ötesindekileri hiç güncelleme
+      if (dPlayer > this.viewDist) { p.root.visible = false; continue; } // sis ötesindekileri hiç güncelleme
       p.root.visible = true;
       p.lookYaw = 0;
       switch (s.mode) {

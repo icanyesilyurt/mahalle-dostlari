@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { Breed, itemById } from '../core/catalog';
 import { rng } from '../world/kit';
+import { mergeStatic } from './merge';
 
 export type PetPose = 'stand' | 'sit' | 'lie' | 'eat' | 'happy' | 'beg';
 
@@ -180,7 +181,7 @@ export class Pet {
       if (wiry) { const beard = new THREE.Mesh(new THREE.IcosahedronGeometry(headR * 0.34, 1), fur(L.belly)); beard.scale.set(1, 0.8, 1); beard.position.set(0, -headR * 0.55, headR * (0.95 + 0.3 * sn)); this.head.add(beard); }
       this.jaw.position.set(0, -headR * 0.5, headR * (0.75 + 0.2 * sn));
       const lower = new THREE.Mesh(new THREE.CapsuleGeometry(headR * 0.3, headR * 0.3 * sn, 4, 10), faceMark); lower.rotation.x = Math.PI / 2; lower.position.z = headR * 0.15; this.jaw.add(lower);
-      this.tongue = new THREE.Mesh(S(headR * 0.16, 8, 6), std('#e8707e', { roughness: 0.4 })); this.tongue.scale.set(1, 0.35, 1.6); this.tongue.position.set(0, -headR * 0.05, headR * (0.3 + 0.2 * sn)); this.jaw.add(this.tongue);
+      this.tongue = new THREE.Mesh(S(headR * 0.16, 8, 6), std('#e8707e', { roughness: 0.4 })); this.tongue.userData.noMerge = true; this.tongue.scale.set(1, 0.35, 1.6); this.tongue.position.set(0, -headR * 0.05, headR * (0.3 + 0.2 * sn)); this.jaw.add(this.tongue);
       this.mouth.position.set(0, -headR * 0.5, headR * (1.05 + 0.35 * sn));
     }
     this.head.add(this.jaw);
@@ -246,6 +247,7 @@ export class Pet {
     void dark;
     // tüy malzemesi köşe rengi ister: eksik olan geometrilere yumuşak gradyan ekle
     this.rig.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.MeshStandardMaterial).vertexColors && !m.geometry.attributes.color) gradient(m.geometry); });
+    mergeStatic(this.rig);
   }
 
   setGear(wear?: string, collar?: string) {
@@ -266,6 +268,7 @@ export class Pet {
   }
 
   setPose(p: PetPose) { this.pose = p; }
+
 
   /** Sevilince: kedi mırlar (titrer, gözler kapalı), köpek havlar (kafa kalkar, ağız açılır). */
   react() { this.reactT = 1.1; }
