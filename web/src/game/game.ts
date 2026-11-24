@@ -12,6 +12,7 @@ import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { setMultiDraw } from '../world/assets';
+import { NIGHT, dayState, hourNow, skyMaterial } from './daycycle';
 import { CITY_BUILDERS, WorldData, blocked, collide, getKits, makeMaterials, onLand } from '../world/world';
 import { haptic, sfx } from '../ui/sfx';
 import { Input } from './input';
@@ -54,6 +55,12 @@ export class Game {
   private manualT = 0;
   private camTarget = new THREE.Vector3();
   private sky!: THREE.Mesh;
+  private hemi!: THREE.HemisphereLight;
+  private fill!: THREE.DirectionalLight;
+  private lampGlow: THREE.InstancedMesh | null = null;
+  private lampLights: THREE.PointLight[] = [];
+  private lampT = 0;
+  private dayT = 0;
   strays: Stray[] = [];
   companion: Companion | null = null;
   homePets: Companion[] = [];
@@ -104,14 +111,9 @@ export class Game {
     const FOG = '#f3dcc4';
     s.background = new THREE.Color(FOG);
     s.fog = new THREE.Fog(FOG, 70, 260);
-    this.sky = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), new THREE.ShaderMaterial({
-      side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { top: { value: new THREE.Color('#6fa8dc') }, mid: { value: new THREE.Color('#b9d7ec') }, hor: { value: new THREE.Color(FOG) } },
-      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 hor; varying vec3 vP; void main(){ float h = normalize(vP).y; vec3 c = h < 0.0 ? hor : mix(hor, mid, smoothstep(0.0, 0.18, h)); c = mix(c, top, smoothstep(0.18, 0.75, h)); gl_FragColor = vec4(c, 1.0); }',
-    }));
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(260, 32, 16), skyMaterial());
     this.sky.renderOrder = -1; this.sky.frustumCulled = false; s.add(this.sky);
-    s.add(new THREE.HemisphereLight('#fff0d8', '#9d8a74', 1.35));
+    this.hemi = new THREE.HemisphereLight('#fff0d8', '#9d8a74', 1.35); s.add(this.hemi);
     const sun = new THREE.DirectionalLight('#ffe0b0', 2.6);
     sun.castShadow = true;
     const sz = this.lowEnd ? 1024 : 2048;
@@ -121,7 +123,7 @@ export class Game {
     sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03; sun.shadow.radius = 3;
     s.add(sun, sun.target);
     this.sun = sun;
-    const fill = new THREE.DirectionalLight('#bcd6ff', 0.45); fill.position.set(30, 20, -40); s.add(fill);
+    const fill = new THREE.DirectionalLight('#bcd6ff', 0.45); fill.position.set(30, 20, -40); s.add(fill); this.fill = fill;
 
     this.marker = new THREE.Mesh(new THREE.RingGeometry(0.25, 0.36, 24), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }));
     this.marker.rotation.x = -Math.PI / 2; this.marker.visible = false; s.add(this.marker);
@@ -171,6 +173,14 @@ export class Game {
       const h = new Human({ outfit: 'tisort_mercan', hat: n.hat, skin: '#e0b090', hair: '#3a3030', pants: '#4a4a4a', shirt: n.shirt });
       h.root.position.set(n.x, 0, n.z); h.root.rotation.y = n.rot; h.sitting = !!n.sit;
       this.scene.add(h.root); this.npcs.push(h);
+    }
+    // fenerler: gece yanan ışıltı (bloom) + oyuncuya en yakın birkaç gerçek ışık
+    if (this.world.lamps?.length) {
+      const gm = new THREE.MeshBasicMaterial({ color: '#000000', toneMapped: true });
+      const im = new THREE.InstancedMesh(new THREE.SphereGeometry(0.2, 10, 8), gm, this.world.lamps.length);
+      this.world.lamps.forEach(([x, z], i) => im.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, this.world.lampH ?? 3.45, z)));
+      im.computeBoundingSphere(); this.scene.add(im); this.lampGlow = im;
+      for (let i = 0; i < 4; i++) { const l = new THREE.PointLight('#ffc070', 0, 13, 1.6); l.position.set(0, -50, 0); this.scene.add(l); this.lampLights.push(l); }
     }
     // gezinen NPC'ler (yalnız yeni görünümde)
     const SH = ['#e2493b', '#3b6aa8', '#2f7d6d', '#e2a33b', '#8e3b5a', '#f4efe6', '#6b8fbf'];
@@ -336,7 +346,7 @@ export class Game {
     this.faceTo(target.root.position);
     haptic(8);
     this.player.act('pet', 1.8, () => {
-      target.cat ? sfx.purr() : sfx.bark();
+      target.cat ? sfx.purr() : sfx.bark(); target.react();
       this.ev.hearts(target.root.position.clone().setY(target.height + 0.2));
     });
     if (s) {
@@ -388,6 +398,26 @@ export class Game {
       this.draw();
     };
     loop();
+  }
+
+  /** Gün döngüsü: gerçek saate göre gökyüzü, güneş/ay, ışıklar; gece fenerler ve pencereler yanar. */
+  private updateDay(dt: number) {
+    this.dayT -= dt; if (this.dayT > 0) return; this.dayT = 0.5;
+    const d = dayState(hourNow());
+    const u = (this.sky.material as THREE.ShaderMaterial).uniforms;
+    u.top.value.copy(d.top); u.mid.value.copy(d.mid); u.hor.value.copy(d.hor); u.sunDir.value.copy(d.sunDir); u.sunCol.value.copy(d.sun);
+    const fog = this.scene.fog as THREE.Fog; fog.color.copy(d.fog); (this.scene.background as THREE.Color).copy(d.fog);
+    this.sun.color.copy(d.sun); this.sun.intensity = d.sunI; this.sunDir.copy(d.sunDir);
+    this.hemi.color.copy(d.hemiS); this.hemi.groundColor.copy(d.hemiG); this.hemi.intensity = d.hemiI;
+    this.fill.intensity = d.fillI;
+    this.renderer.toneMappingExposure = d.exp;
+    NIGHT.value = d.night;
+    if (this.lampGlow) (this.lampGlow.material as THREE.MeshBasicMaterial).color.setRGB(2.2, 1.55, 0.8).multiplyScalar(Math.max(0, d.night - 0.15) / 0.85);
+    // en yakın fenerlere gerçek ışık
+    if (this.lampLights.length && this.world.lamps) {
+      const p = this.pos, near = this.world.lamps.map(([x, z]) => [x, z, (x - p.x) ** 2 + (z - p.z) ** 2]).sort((a, b) => a[2] - b[2]);
+      this.lampLights.forEach((l, i) => { const n = near[i]; if (!n) return; l.position.set(n[0], (this.world.lampH ?? 3.45) - 0.2, n[1]); l.intensity = d.night * 9; });
+    }
   }
 
   /** Karo LOD: kameraya ~75 m'den yakın karolarda ayrıntılı pencereler, uzakta basit olanlar (sis içinde, fark edilmez). */
@@ -499,6 +529,7 @@ export class Game {
     for (const n of this.npcs) n.update(dt);
     this.updateWalkers(dt);
     this.updateTiles();
+    this.updateDay(dt);
     this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
@@ -769,7 +800,7 @@ export class Game {
           p.setPose('stand');
           if (this.walkTo(p, c, b.mesh.position, 5.6, dt, p.radius * 0.8 + 0.1) || c.t < 0) {
             // ağza al
-            p.mouth.add(b.mesh); b.mesh.position.set(0, 0, 0); c.ball = b.mesh; this.balls = this.balls.filter(x => x !== b);
+            p.mouth.add(b.mesh); b.mesh.position.set(0, 0, 0); b.mesh.scale.setScalar(1 / p.scaleK); c.ball = b.mesh; this.balls = this.balls.filter(x => x !== b);
             c.mode = 'return'; c.t = 10;
           }
         } else { p.setPose('stand'); this.walkTo(p, c, b.mesh.position.clone().setY(0), 4.2, dt, 0.3); }

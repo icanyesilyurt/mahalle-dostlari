@@ -161,6 +161,7 @@ function strayLook(a: any[]): StraySpawn {
       belly: col2 || '#' + c.clone().lerp(new THREE.Color('#f4efe6'), 0.55).getHexString(),
       mark: pat === 'tabby' ? '#' + c.clone().multiplyScalar(0.55).getHexString() : pat === 'calico' ? '#e38a3a' : pat === 'spots' ? '#2a2422' : undefined,
       pattern: pat as any, size: size ?? 1, floppy: !cat && (size ?? 1) > 1.05,
+      ear: cat ? 'up' : (size ?? 1) > 1.05 ? 'floppy' : 'semi', tailStyle: cat ? 'cat' : 'curl', chub: 0.9 + ((id.length * 7) % 5) * 0.08,
     },
   };
 }
@@ -256,7 +257,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     lands: (D.lands as number[][]).concat([D.bridge, D.pier]).map(([x0, x1, z0, z1]) => ({ x0, x1, z0, z1 })),
     spawn: sc ? sc.spawn : new THREE.Vector3(start[0], 0, start[1]),
     spawnYaw: sc ? sc.spawnYaw : start[2],
-    walkers: sc?.walkers, pigeons: sc?.pigeons, tiles: sc?.tiles,
+    walkers: sc?.walkers, pigeons: sc?.pigeons, tiles: sc?.tiles, lamps: sc ? (D.lamps as [number, number][]) : undefined, lampH: 3.45,
     fountain: fountains[0], fountains, fountainR,
     strays: (D.animals as any[][]).filter(a => (a[6] ?? 0) < 0.5).map(strayLook).concat(sc?.strays ?? []),
     npcs: (D.vendors as number[][]).map(([x, z, ry]): NpcSpawn => ({ x, z, rot: ry, shirt: '#f4efe6', hat: 'kasket', role: 'Simitçi' })).concat(sc?.npcs ?? []),

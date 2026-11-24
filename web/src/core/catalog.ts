@@ -23,6 +23,12 @@ export interface BreedLook {
   tail?: number;     // kuyruk uzunluğu
   eyes?: string;
   snout?: number;    // burun uzunluğu (köpek)
+  ear?: 'up' | 'fold' | 'floppy' | 'semi' | 'tuft';   // kulak tipi
+  fur?: 'short' | 'long' | 'wiry';   // tüy
+  chub?: number;     // tombulluk (1 = normal)
+  eyes2?: string;    // farklı renk ikinci göz (Van/Ankara)
+  tailStyle?: 'cat' | 'curl' | 'plume' | 'stub' | 'whip';
+  height?: number;   // omuz değil toplam boy (m); verilmezse türe göre
 }
 
 export interface Breed { id: string; species: Species; name: string; price: Price; look: BreedLook }
@@ -33,26 +39,28 @@ const D = (id: string, name: string, price: Price, look: Partial<BreedLook> & Pi
   ({ id, species: 'dog', name, price, look: { size: 1, belly: '#f4ead8', ...look } });
 
 export const BREEDS: Breed[] = [
-  // Kediler (eski Godot kataloğundan uyarlandı)
-  C('tekir', 'Tekir', { coin: 500 }, { body: '#8d8f94', mark: '#4a4c51', pattern: 'tabby', eyes: '#c9b23a' }),
-  C('sarman', 'Sarman', { coin: 500 }, { body: '#e9a24c', mark: '#b5651f', belly: '#f7e2c2', pattern: 'tabby', eyes: '#d8a020' }),
-  C('smokin', 'Smokin', { coin: 600 }, { body: '#2a2727', belly: '#f4f1ea', pattern: 'tuxedo', eyes: '#9ccf5a' }),
-  C('uc_renk', 'Üç Renkli', { coin: 700 }, { body: '#f4f0e8', mark: '#e38a3a', belly: '#f8f4ee', pattern: 'calico', eyes: '#d8a020' }),
-  C('kara', 'Kara Kedi', { coin: 500 }, { body: '#262424', belly: '#2f2c2c', pattern: 'solid', eyes: '#e8b53a' }),
-  C('van', 'Van Kedisi', { coin: 1200 }, { body: '#f8f6f0', belly: '#ffffff', pattern: 'solid', fluff: 0.5, size: 1.1, eyes: '#6fb3d6' }),
-  C('siyam', 'Siyam', { coin: 1100 }, { body: '#efe2c8', mark: '#4a3428', pattern: 'points', ears: 1.2, size: 0.95, eyes: '#5aa8e8' }),
-  C('british', 'British Shorthair', { coin: 1300 }, { body: '#8e97a3', belly: '#9aa3ae', pattern: 'solid', head: 1.15, ears: 0.8, size: 1.1, eyes: '#e8a43a' }),
-  C('maine_coon', 'Maine Coon', { gem: 25 }, { body: '#8a6a4a', mark: '#4a3424', pattern: 'tabby', size: 1.35, fluff: 0.9, tail: 1.3, eyes: '#c9a03a' }),
-  C('munchkin', 'Munchkin', { gem: 20 }, { body: '#d8a874', mark: '#9a6a3c', pattern: 'tabby', legs: 0.55, eyes: '#9ccf5a' }),
-  // Köpekler
-  D('sokak', 'Sokak Köpeği', { coin: 500 }, { body: '#d9b46a', belly: '#f0e2c0', pattern: 'solid', size: 1.05 }),
-  D('kangal', 'Kangal', { coin: 1500 }, { body: '#d8c39a', belly: '#ece0c4', mark: '#2a2422', pattern: 'mask', size: 1.4, floppy: true, head: 1.1 }),
-  D('golden', 'Golden Retriever', { coin: 1200 }, { body: '#d9a25a', belly: '#ecc888', pattern: 'solid', size: 1.2, floppy: true, tail: 1.3, fluff: 0.5 }),
-  D('beagle', 'Beagle', { coin: 800 }, { body: '#a8662e', belly: '#f4eee2', mark: '#2a2422', pattern: 'saddle', size: 0.85, floppy: true, ears: 1.2 }),
-  D('dalmacyali', 'Dalmaçyalı', { coin: 1000 }, { body: '#f4f2ec', belly: '#f8f6f0', mark: '#1f1c1b', pattern: 'spots', size: 1.15, floppy: true }),
-  D('corgi', 'Corgi', { coin: 1100 }, { body: '#d9893a', belly: '#f6eee2', pattern: 'solid', legs: 0.55, long: 1.15, ears: 1.35, tail: 0.4, head: 1.1 }),
-  D('husky', 'Husky', { gem: 25 }, { body: '#5d6066', belly: '#f2f0ea', pattern: 'mask', mark: '#f2f0ea', size: 1.15, fluff: 0.4, eyes: '#6fb3d6' }),
-  D('pug', 'Pug', { gem: 15 }, { body: '#d9c09a', belly: '#e6d2b0', mark: '#2a2422', pattern: 'mask', size: 0.75, head: 1.35, floppy: true, snout: 0.4 }),
+  // Kediler: boy ~ karakterin dizi (0.34-0.45 m). Her ırkın silüeti farklı.
+  C('tekir', 'Tekir', { coin: 500 }, { body: '#8d8f94', mark: '#4a4c51', pattern: 'tabby', eyes: '#c9b23a', ear: 'up', tailStyle: 'cat' }),
+  C('sarman', 'Sarman', { coin: 500 }, { body: '#e9a24c', mark: '#b5651f', belly: '#f7e2c2', pattern: 'tabby', eyes: '#9ccf5a', chub: 1.12, ear: 'up' }),
+  C('smokin', 'Smokin', { coin: 600 }, { body: '#2a2727', belly: '#f4f1ea', pattern: 'tuxedo', eyes: '#e8c33a', chub: 0.95, ear: 'up' }),
+  C('uc_renk', 'Üç Renkli', { coin: 700 }, { body: '#f4f0e8', mark: '#e38a3a', belly: '#f8f4ee', pattern: 'calico', eyes: '#d8a020', ear: 'up' }),
+  C('kara', 'Kara Kedi', { coin: 500 }, { body: '#262424', belly: '#2f2c2c', pattern: 'solid', eyes: '#e8b53a', chub: 0.9, long: 1.1, ear: 'up', ears: 1.15, tailStyle: 'whip' }),
+  C('van', 'Van Kedisi', { coin: 1200 }, { body: '#f8f6f0', belly: '#ffffff', mark: '#d98a3a', pattern: 'solid', fur: 'long', size: 1.1, eyes: '#5aa8e8', eyes2: '#e8b53a', chub: 1.05, tailStyle: 'plume' }),
+  C('ankara', 'Ankara Kedisi', { coin: 1300 }, { body: '#fbfaf6', belly: '#ffffff', pattern: 'solid', fur: 'long', ear: 'tuft', ears: 1.2, chub: 0.85, long: 1.1, eyes: '#6fc0e8', eyes2: '#9ccf5a', tailStyle: 'plume' }),
+  C('siyam', 'Siyam', { coin: 1100 }, { body: '#efe2c8', mark: '#4a3428', pattern: 'points', ears: 1.35, ear: 'up', chub: 0.82, long: 1.1, legs: 1.15, size: 0.95, eyes: '#5aa8e8', tailStyle: 'whip' }),
+  C('british', 'British Shorthair', { coin: 1300 }, { body: '#8e97a3', belly: '#9aa3ae', pattern: 'solid', head: 1.18, ears: 0.75, ear: 'fold', chub: 1.3, legs: 0.85, size: 1.08, eyes: '#e8a43a', tail: 0.8 }),
+  C('maine_coon', 'Maine Coon', { gem: 25 }, { body: '#8a6a4a', mark: '#4a3424', pattern: 'tabby', size: 1.35, fur: 'long', ear: 'tuft', tail: 1.2, eyes: '#c9a03a', tailStyle: 'plume' }),
+  C('munchkin', 'Munchkin', { gem: 20 }, { body: '#d8a874', mark: '#9a6a3c', pattern: 'tabby', legs: 0.5, chub: 1.1, eyes: '#9ccf5a' }),
+  // Köpekler: boy ırka göre diz ile bel arası (0.38-0.72 m)
+  D('sokak', 'Sokak Köpeği', { coin: 500 }, { body: '#d9b46a', belly: '#f0e2c0', pattern: 'solid', size: 1.05, ear: 'semi', tailStyle: 'curl' }),
+  D('kangal', 'Kangal', { coin: 1500 }, { body: '#d8c39a', belly: '#ece0c4', mark: '#2a2422', pattern: 'mask', size: 1.4, ear: 'floppy', ears: 0.8, head: 1.08, chub: 1.15, legs: 1.15, tailStyle: 'curl', height: 0.74 }),
+  D('golden', 'Golden Retriever', { coin: 1200 }, { body: '#d9a25a', belly: '#ecc888', pattern: 'solid', size: 1.2, ear: 'floppy', tail: 1.2, fur: 'long', tailStyle: 'plume', height: 0.64 }),
+  D('beagle', 'Beagle', { coin: 800 }, { body: '#a8662e', belly: '#f4eee2', mark: '#2a2422', pattern: 'saddle', size: 0.85, ear: 'floppy', ears: 1.3, legs: 0.9, tailStyle: 'whip', height: 0.46 }),
+  D('dalmacyali', 'Dalmaçyalı', { coin: 1000 }, { body: '#f4f2ec', belly: '#f8f6f0', mark: '#1f1c1b', pattern: 'spots', size: 1.15, ear: 'floppy', chub: 0.85, legs: 1.2, tailStyle: 'whip', height: 0.64 }),
+  D('corgi', 'Corgi', { coin: 1100 }, { body: '#d9893a', belly: '#f6eee2', pattern: 'solid', legs: 0.5, long: 1.15, ears: 1.4, ear: 'up', tailStyle: 'stub', head: 1.1, chub: 1.15, height: 0.4 }),
+  D('husky', 'Husky', { gem: 25 }, { body: '#5d6066', belly: '#f2f0ea', pattern: 'mask', mark: '#f2f0ea', size: 1.15, fur: 'long', ear: 'up', eyes: '#6fb3d6', tailStyle: 'curl', height: 0.62 }),
+  D('pug', 'Pug', { gem: 15 }, { body: '#d9c09a', belly: '#e6d2b0', mark: '#2a2422', pattern: 'mask', size: 0.75, head: 1.3, ear: 'fold', snout: 0.35, chub: 1.25, legs: 0.8, tailStyle: 'curl', height: 0.38 }),
+  D('terrier', 'Terrier', { coin: 900 }, { body: '#e8dcc4', belly: '#f4eee2', mark: '#8a6a4a', pattern: 'saddle', size: 0.8, fur: 'wiry', ear: 'fold', ears: 0.9, snout: 1.1, legs: 0.95, tailStyle: 'stub', height: 0.42 }),
 ];
 
 export const breedById = (id: string) => BREEDS.find(b => b.id === id);

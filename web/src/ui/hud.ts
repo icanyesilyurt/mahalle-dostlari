@@ -8,7 +8,7 @@ import type { Game } from '../game/game';
 import { petThumb } from '../game/thumbs';
 import { TestAdProvider, AdProvider } from '../core/ads';
 import { I } from './icons';
-import { Human } from '../actors/human';
+import { HAIR_STYLES, Human } from '../actors/human';
 import { haptic, setMuted, sfx } from './sfx';
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
@@ -218,7 +218,9 @@ export class Hud {
         const owned = (k: ItemKind) => ITEMS.filter(i => i.kind === k && (s.items[i.id] ?? 0) > 0);
         html += `<div class="list"><div class="card"><b>Kıyafet</b><div class="gear">${owned('outfit').map(i => `<button class="gearbtn lg ${s.look.outfit === i.id ? 'on' : ''}" data-outfit="${i.id}" title="${i.name}">${itemIcon(i)}</button>`).join('')}</div></div>
           <div class="card"><b>Şapka / aksesuar</b><div class="gear"><button class="gearbtn lg ${!s.look.hat ? 'on' : ''}" data-hat="">—</button>${owned('hat').map(i => `<button class="gearbtn lg ${s.look.hat === i.id ? 'on' : ''}" data-hat="${i.id}" title="${i.name}">${itemIcon(i)}</button>`).join('')}</div></div>
-          <div class="card"><b>Saç rengi</b><div class="gear">${['#4a2f22', '#2b2320', '#8a5a32', '#c9a46a', '#b8442a', '#e8d8a8', '#3b6aa8', '#d98aa0'].map(c => `<button class="swatch ${s.look.hair === c ? 'on' : ''}" style="background:${c}" data-hair="${c}"></button>`).join('')}</div>
+          <div class="card"><b>Karakter</b><div class="gear">${[['m', 'Erkek'], ['f', 'Kadın']].map(([v, n]) => `<button class="btn ${(s.look.gender ?? 'm') === v ? '' : 'ghost'}" data-gender="${v}">${n}</button>`).join('')}</div>
+          <b>Saç modeli</b><div class="gear">${HAIR_STYLES.map(h => `<button class="btn sm ${(s.look.hairStyle ?? (s.look.gender === 'f' ? 'uzun' : 'kisa')) === h.id ? '' : 'ghost'}" data-hairstyle="${h.id}">${h.name}</button>`).join('')}</div>
+          <b>Saç rengi</b><div class="gear">${['#4a2f22', '#2b2320', '#8a5a32', '#c9a46a', '#b8442a', '#e8d8a8', '#3b6aa8', '#d98aa0'].map(c => `<button class="swatch ${s.look.hair === c ? 'on' : ''}" style="background:${c}" data-hair="${c}"></button>`).join('')}</div>
           <b>Ten rengi</b><div class="gear">${['#f6d7bf', '#f1c7a5', '#e0a982', '#c68a62', '#9a6544', '#6e4630'].map(c => `<button class="swatch ${s.look.skin === c ? 'on' : ''}" style="background:${c}" data-skin="${c}"></button>`).join('')}</div></div>
           <small class="hint">Yeni kıyafet ve şapkaları Mağaza'dan veya Sürpriz Paket'ten alabilirsin.</small></div>`;
       } else {
@@ -271,6 +273,8 @@ export class Hud {
     on('hat', v => { s.look.hat = v || null; g.player.setLook(s.look); save(s); this.render(); });
     on('hair', v => { s.look.hair = v; save(s); this.toast('Saç rengi bir sonraki açılışta da kalır'); this.rebuildPlayer(); this.render(); });
     on('skin', v => { s.look.skin = v; save(s); this.rebuildPlayer(); this.render(); });
+    on('gender', v => { s.look.gender = v as any; save(s); this.rebuildPlayer(); this.render(); });
+    on('hairstyle', v => { s.look.hairStyle = v as any; save(s); this.rebuildPlayer(); this.render(); });
     on('place', v => { this.close(); g.startPlacing(v); this.placeMode(true); });
     on('goshop', v => this.open('shop', v));
     on('goto', v => { const h = s.houses.find(h => h.uid === v)!; g.pos.set(h.x, 0, h.z + 2); this.close(); });

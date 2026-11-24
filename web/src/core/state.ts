@@ -29,7 +29,7 @@ export interface GameState {
   houses: PlacedHouse[];
   pets: OwnedPet[];
   activePet: string | null;          // yanında yürüyen pet
-  look: { outfit: string; hat: string | null; skin: string; hair: string };
+  look: { outfit: string; hat: string | null; skin: string; hair: string; gender?: 'm' | 'f'; hairStyle?: 'kisa' | 'dalgali' | 'uzun' | 'atkuyrugu' | 'topuz' | 'kivircik' };
   friends: Record<string, Friend>;   // sokak hayvanı id -> ilişki
   stats: { fed: number; watered: number; boxes: number; ads: number };
   muted: boolean;
@@ -39,7 +39,7 @@ export function newState(now: number): GameState {
   return {
     v: SAVE_VERSION, food: FOOD_MAX, foodTs: now, water: WATER_MAX, coins: 300, gems: 15,
     city: 'istanbul', unlockedCities: ['istanbul'], items: { tisort_mercan: 1 }, houses: [], pets: [], activePet: null,
-    look: { outfit: 'tisort_mercan', hat: null, skin: '#f1c7a5', hair: '#4a2f22' },
+    look: { outfit: 'tisort_mercan', hat: null, skin: '#f1c7a5', hair: '#4a2f22', gender: 'm', hairStyle: 'dalgali' },
     friends: {}, stats: { fed: 0, watered: 0, boxes: 0, ads: 0 }, muted: false,
   };
 }

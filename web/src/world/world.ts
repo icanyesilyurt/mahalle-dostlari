@@ -31,6 +31,8 @@ export interface WorldData {
   fountainR?: number;
   walkers?: [number, number][][];
   tiles?: Tile[];
+  lamps?: [number, number][];
+  lampH?: number;
   pigeons?: [number, number][];
   water: Rect[];
   parks: Rect[];

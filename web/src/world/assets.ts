@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { NIGHT } from '../game/daycycle';
 
 export interface KitAsset { geo: THREE.BufferGeometry; mat: THREE.Material | THREE.Material[]; size: THREE.Vector3 }
 export interface Kits {
@@ -19,6 +20,9 @@ function wallTintMaterial(map: THREE.Texture, glass = false): THREE.MeshStandard
   map.magFilter = THREE.LinearFilter; map.minFilter = THREE.LinearMipmapLinearFilter;
   const m = new THREE.MeshStandardMaterial({ map, roughness: 0.86, metalness: 0 });
   m.onBeforeCompile = s => {
+    s.uniforms.uNight = NIGHT;
+    s.vertexShader = 'varying vec3 vWPos;\n' + s.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWPos = (inverse(viewMatrix) * mvPosition).xyz;');
+    s.fragmentShader = 'uniform float uNight;\nvarying vec3 vWPos;\n' + s.fragmentShader;
     // cam: atlasın mavi kareleri (u,v .5-.75) koyu lacivert-yeşil, parlak, kenara doğru gökyüzü yansıması
     s.fragmentShader = s.fragmentShader.replace('#include <color_fragment>', `
   float glassM = 0.0;
@@ -35,7 +39,11 @@ function wallTintMaterial(map: THREE.Texture, glass = false): THREE.MeshStandard
     s.fragmentShader = s.fragmentShader.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.18, glassM);')
       .replace('#include <opaque_fragment>', `#include <opaque_fragment>
   float fres = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.5);
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.50, 0.66, 0.78), glassM * (0.10 + 0.55 * fres));`);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.50, 0.66, 0.78), glassM * (0.10 + 0.55 * fres) * (1.0 - uNight * 0.8));
+  // gece: pencerelerin yaklaşık yarısında sıcak ışık yanar (konuma göre sabit)
+  vec3 wc = floor(vWPos / vec3(1.7, 2.9, 1.7));
+  float lit = step(0.45, fract(sin(dot(wc, vec3(12.9898, 78.233, 37.719))) * 43758.5453));
+  gl_FragColor.rgb += glassM * lit * uNight * vec3(1.9, 1.25, 0.55);`);
   };
   m.customProgramCacheKey = () => 'walltint' + (glass ? 'g' : '');
   return m;

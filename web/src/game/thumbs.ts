@@ -24,7 +24,7 @@ export function petThumb(breedId: string, gear: { wear?: string; collar?: string
   scene.add(pet.root);
   const h = pet.height;
   const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 20);
-  cam.position.set(0, h * 0.75, h * 3.1 + 0.4); cam.lookAt(0, h * 0.45, 0);
+  cam.position.set(0, h * 0.8, h * 3.3); cam.lookAt(0, h * 0.48, 0);
   r.render(scene, cam);
   const url = r.domElement.toDataURL('image/png');
   cache.set(key, url);
