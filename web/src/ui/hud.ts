@@ -11,7 +11,7 @@ import { I } from './icons';
 import { HAIR_STYLES, Human } from '../actors/human';
 import { CARE_COIN, DECOR, SHELTER_UPGRADE, VET_COIN, buyDecor, care, claimQuest, claimable, discharge, dayKey, ensureQuests, level, shelterCap, speedUp, upgradeShelter, xpForLevel } from '../core/care';
 import { petThumbLook } from '../game/thumbs';
-import { haptic, setMuted, sfx } from './sfx';
+import { haptic, setSound, sfx } from './sfx';
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -46,7 +46,8 @@ export class Hud {
   bind(game: Game) {
     this.game = game;
     const s = game.state;
-    setMuted(s.muted);
+    s.sound ??= { sfx: !s.muted, music: !s.muted };
+    setSound(s.sound);
     document.querySelectorAll<HTMLElement>('[data-icon]').forEach(el => { el.insertAdjacentHTML('afterbegin', (I as any)[el.dataset.icon!]); });
     // basınca hafif büyüme + ses + titreşim (tüm butonlar)
     document.addEventListener('pointerdown', e => { const b = (e.target as HTMLElement).closest('button'); if (b && !b.disabled) { sfx.tap(); haptic(8); } }, true);
@@ -63,7 +64,8 @@ export class Hud {
     $('#foodPill').onclick = () => this.foodModal();
     $('#coinPlus').onclick = () => this.open('shop', 'box');
     $('#gemPlus').onclick = () => this.open('shop', 'gem');
-    $('#muteBtn').onclick = () => { s.muted = !s.muted; setMuted(s.muted); save(s); this.sync(); };
+    $('#muteBtn').onclick = () => this.soundMenu();
+    $('#btnHorn').onclick = () => game.honk();
     for (const id of ['map', 'pets', 'shop', 'home']) $(`#nav-${id}`).onclick = () => this.sheetOpen === id ? this.close() : this.open(id);
     $('#sheetClose').onclick = () => this.close();
     $('#scrim').onclick = () => this.close();
@@ -94,7 +96,7 @@ export class Hud {
     $('#waterN').textContent = `${s.water}/${WATER_MAX}`;
     $('#foodBadge').textContent = String(s.food);
     $('#foodPill').classList.toggle('low', s.food <= 2);
-    $('#muteBtn').innerHTML = s.muted ? I.mute : I.sound;
+    $('#muteBtn').innerHTML = s.sound && !s.sound.sfx && !s.sound.music ? I.mute : I.sound;
     this.nearChanged();
     if (this.sheetOpen) this.render();
   }
@@ -110,6 +112,7 @@ export class Hud {
     const sp = $('#btnSpot'); sp.classList.toggle('show', !!g.spot);
     if (g.spot) { sp.querySelector('.lbl')!.textContent = g.spot.label; sp.querySelector('.spotico')!.textContent = g.spot.icon; }
     $('#callBtn').textContent = ({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[g.state.garage.active] ?? '🚲';
+    const hb = $('#btnHorn'); hb.classList.toggle('show', g.riding); hb.querySelector('.spotico')!.textContent = g.state.garage.active === 'bisiklet' ? '🔔' : '📯'; hb.querySelector('.lbl')!.textContent = g.state.garage.active === 'bisiklet' ? 'Zil' : 'Korna';
     const rb = $('#btnRide'); rb.classList.toggle('show', g.nearVehicle || g.riding);
     rb.querySelector('.lbl')!.textContent = g.riding ? 'İn' : 'Bin';
     rb.querySelector('.rideico')!.textContent = ({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[g.state.garage.active] ?? '🚲';
@@ -349,6 +352,18 @@ export class Hud {
     on('goto', v => { const h = s.houses.find(h => h.uid === v)!; g.pos.set(h.x, 0, h.z + 2); this.close(); });
     on('city', v => this.toast(`${CITIES.find(c => c.id === v)!.name} yakında`));
     on('unlock', v => { if (unlockCity(s, v)) { sfx.success(); save(s); this.sync(); } });
+  }
+
+  /** Ses ayarı: müzik/ortam ve efektler ayrı ayrı. */
+  soundMenu() {
+    const s = this.game.state; s.sound ??= { sfx: true, music: true };
+    let m = document.getElementById('soundMenu');
+    if (m) { m.remove(); return; }
+    m = document.createElement('div'); m.id = 'soundMenu';
+    const draw = () => { m!.innerHTML = `<b>Ses</b><button class="btn sm ${s.sound!.music ? '' : 'ghost'}" data-snd="music">🎵 Müzik ve ortam: ${s.sound!.music ? 'Açık' : 'Kapalı'}</button><button class="btn sm ${s.sound!.sfx ? '' : 'ghost'}" data-snd="sfx">🔔 Efektler: ${s.sound!.sfx ? 'Açık' : 'Kapalı'}</button>`;
+      m!.querySelectorAll<HTMLElement>('[data-snd]').forEach(b => b.onclick = () => { const k = b.dataset.snd as 'sfx' | 'music'; s.sound![k] = !s.sound![k]; s.muted = !s.sound!.sfx && !s.sound!.music; setSound(s.sound!); save(s); this.sync(); draw(); sfx.tap(); }); };
+    draw(); document.body.appendChild(m);
+    setTimeout(() => { const off = (e: PointerEvent) => { if (!m!.contains(e.target as Node) && (e.target as HTMLElement).id !== 'muteBtn') { m!.remove(); removeEventListener('pointerdown', off, true); } }; addEventListener('pointerdown', off, true); }, 50);
   }
 
   questDot() { const d = document.getElementById('questDot'); if (d) d.classList.toggle('on', claimable(this.game.state) > 0); }

@@ -14,6 +14,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { setMultiDraw, wallTint } from '../world/assets';
 import { NIGHT, dayState, hourNow, skyMaterial } from './daycycle';
 import { VEHICLE_DEFS, Vehicle } from './vehicles';
+import { ambience, engine } from '../ui/sfx';
 import { admit, ensureQuests, finishWalk, questProgress } from '../core/care';
 import { petHouse as petHouseModel } from '../world/pethouse';
 import type { StraySpawn } from '../world/world';
@@ -88,6 +89,8 @@ export class Game {
   private shelterGroup = new THREE.Group();
   private shelterPets: { pet: Pet; target: THREE.Vector3 | null; t: number; yaw: number }[] = [];
   private rideMeters = 0;
+  private healedSeen = new Set<string>();
+  private shelterSoundT = 5;
   /** Barınaktan gezdirilen dost (tasmalı). */
   walking: { uid: string; name: string; pet: Pet; yaw: number; meters: number; acc: number; leash: THREE.Mesh } | null = null;
   private trams: { mesh: THREE.InstancedMesh; pts: THREE.Vector3[]; len: number; s: number; dir: number; speed: number }[] = [];
@@ -484,11 +487,11 @@ export class Game {
         this.strays = this.strays.filter(x => x !== s);
       }
       const n = this.carriedSick.length; this.carriedSick = [];
-      sfx.success(); save(this.state); this.ev.changed();
+      sfx.vetBell(); save(this.state); this.ev.changed();
       this.ev.toast(`${n} dost tedaviye alındı. Veteriner panelinden takip et`);
       this.ev.open?.('vet');
     } else if (sp.kind === 'walkend') this.endWalk();
-    else this.ev.open?.(sp.kind);
+    else { if (sp.kind === 'vet') sfx.vetBell(); this.ev.open?.(sp.kind); }
     this.ev.nearChanged();
   }
 
@@ -649,6 +652,7 @@ export class Game {
     const v = this.vehicle; if (!v) return;
     if (this.riding) {
       this.riding = false;
+      engine.stop();
       const side = new THREE.Vector3(Math.cos(v.yaw), 0, -Math.sin(v.yaw)).multiplyScalar(-(v.def.radius + 0.6));
       const p = v.root.position.clone().add(side);
       if (blocked(p.x, p.z, 0.35, this.world.colliders) || !onLand(p.x, p.z, this.world.lands)) p.copy(v.root.position).sub(side);
@@ -665,6 +669,7 @@ export class Game {
       if (!this.nearVehicle) return;
       this.riding = true;
       this.pos.copy(v.root.position); this.yaw = v.yaw;
+      if (v.def.id !== 'bisiklet') engine.start(v.def.id as any); else sfx.bell();
       if (v.def.seat) { v.root.add(this.player.root); this.player.root.position.set(...v.def.seat); this.player.root.rotation.set(0, 0, 0); this.player.sitting = true; }
       else { this.player.root.visible = false; }
       const c = this.companion;
@@ -675,6 +680,9 @@ export class Game {
     }
     this.ev.nearChanged();
   }
+
+  /** Korna / zil. */
+  honk() { const v = this.vehicle; if (!this.riding || !v) return; if (v.def.id === 'bisiklet') sfx.bell(); else sfx.horn(v.def.id === 'pikap'); for (const s of this.strays) if (s.pet.root.position.distanceTo(this.pos) < 6 && !s.carried) { s.pet.lookYaw = 0.6; } }
 
   /** Araç sürüşü: joystick yönüne dönerek hızlanır; binalardan geçmez (orta + ön + arka çarpışma noktaları). */
   private drive(dt: number, wish: THREE.Vector3, mag: number) {
@@ -700,6 +708,7 @@ export class Game {
     const real = this.pos.distanceTo(before) / dt;
     if (real < v.speed * 0.6) v.speed = real;
     v.root.position.copy(this.pos); v.root.rotation.y = v.yaw; v.animate(dt, turnRate);
+    engine.setSpeed(v.speed / d.speed);
     this.yaw = v.yaw; this.player.speed = 0;
     this.rideMeters += real * dt;
     if (this.rideMeters >= 25) { questProgress(this.state, 'ride', Math.floor(this.rideMeters), now()); this.rideMeters = 0; }
@@ -843,6 +852,13 @@ export class Game {
     this.updateShelter(dt);
     this.updateTrams(dt);
     this.updateWalk(dt);
+    { // sesler: ortam, tedavi bitti, barınakta mutlu hayvanlar
+      const nearSea = !onLand(this.pos.x, this.pos.z - 35, this.world.lands) || !onLand(this.pos.x + 35, this.pos.z, this.world.lands) || !onLand(this.pos.x - 35, this.pos.z, this.world.lands);
+      ambience.update(dt, NIGHT.value, nearSea);
+      for (const tr of this.state.treatments) if (tr.readyAt <= now() && !this.healedSeen.has(tr.id)) { this.healedSeen.add(tr.id); sfx.healed(); this.ev.toast(`🏥 ${tr.name} iyileşti! Veterinerden teslim al`); }
+      const y = this.world.shelterYard;
+      if (y && this.shelterPets.length) { this.shelterSoundT -= dt; if (this.shelterSoundT < 0) { this.shelterSoundT = 6 + Math.random() * 8; if (Math.hypot(this.pos.x - (y.x0 + y.x1) / 2, this.pos.z - (y.z0 + y.z1) / 2) < 22) { const sp = this.shelterPets[Math.floor(Math.random() * this.shelterPets.length)]; sfx.happy(sp.pet.cat); sp.pet.react(); } } }
+    }
     this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }

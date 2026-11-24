@@ -35,6 +35,7 @@ export interface GameState {
   friends: Record<string, Friend>;   // sokak hayvanı id -> ilişki
   stats: { fed: number; watered: number; boxes: number; ads: number };
   muted: boolean;
+  sound?: { sfx: boolean; music: boolean };
   garage: { active: string; color: Record<string, string>; acc: Record<string, string[]>; park?: { x: number; z: number; yaw: number } };
   xp: number;
   treatments: Treatment[];

@@ -280,3 +280,7 @@ body.sheet-open #sheet { transform: translateY(0); }
 @media (orientation: portrait) { .iconbtn.call { position: fixed; right: calc(var(--sar) + 10px); top: calc(var(--sat) + 104px); margin: 0; } }
 .topbar .iconbtn.call { margin-left: auto; }
 .topbar .iconbtn.call + .iconbtn.gfx { margin-left: 6px; }
+
+#soundMenu { position: fixed; right: calc(var(--sar) + 10px); top: calc(var(--sat) + 56px); z-index: 40; background: #fffaf2; border-radius: 16px; padding: 12px; box-shadow: 0 8px 24px rgba(60,30,10,.25); display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
+#soundMenu b { font: 800 15px Baloo2, sans-serif; color: var(--ink); }
+#btnHorn { background: radial-gradient(circle at 35% 30%, #fffdf8, #fff0c8); }
