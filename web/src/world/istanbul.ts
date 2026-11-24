@@ -180,12 +180,12 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     const L = layer[key] ?? 1, mk = key + col;
     if (!groundMats.has(mk) && kits) {
       // gerçek dokulu zemin (ambientCG): yol = arnavut kaldırımı, meydan = yelpaze taş, kaldırım = kesme taş
-      const [c, n] = key === 'cobble' ? kits.tex.arnavut : key === 'slab' && col === 'ffffff' ? kits.tex.kaldirim : key === 'slab' ? kits.tex.tas : [null, null];
+      const [c, n] = key === 'cobble' ? kits.tex.yol : key === 'slab' && col === 'ffffff' ? kits.tex.meydan : key === 'slab' ? kits.tex.plaka : [null, null];
       if (c) {
-        const rep = key === 'cobble' ? 1.6 : key === 'slab' && col === 'ffffff' ? 2.6 : 2.0;
+        const rep = key === 'cobble' ? 3.2 : key === 'slab' && col === 'ffffff' ? 7 : 5;
         const cc = c.clone(), nn = n!.clone(); cc.repeat.set(1 / rep, 1 / rep); nn.repeat.set(1 / rep, 1 / rep); cc.needsUpdate = nn.needsUpdate = true;
-        const tint = key === 'cobble' ? '#f2e6d6' : col === '77746f' ? '#8a857d' : '#fff4e6';
-        groundMats.set(mk, new THREE.MeshStandardMaterial({ map: cc, normalMap: nn, normalScale: new THREE.Vector2(1.6, 1.6), roughness: 0.92, color: tint, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }) as any);
+        const tint = col === '77746f' ? '#9a948a' : '#ffffff';
+        groundMats.set(mk, new THREE.MeshStandardMaterial({ map: cc, normalMap: nn, normalScale: new THREE.Vector2(0.45, 0.45), roughness: 0.95, color: tint, polygonOffset: true, polygonOffsetFactor: -L, polygonOffsetUnits: -L * 4 }) as any);
       }
     }
     if (!groundMats.has(mk)) {
@@ -203,6 +203,7 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   for (const h of D.houses as House[]) if (!kits || !inShowcase(h[0], h[1])) oldHouse(b, h, R);
 
   for (const [ww, hh, dd, x, y, z, col, ry, key] of D.walls as Wall[]) {
+    if (kits && inShowcase(x, z)) continue;
     const k = key === 'shop' ? 'shop' : ['win_a', 'win_b', 'win_c'].includes(key) ? key : 'gf';
     wallBox(b, M(x, 0, z, ry), [k, k, k, k], ww, hh, dd, y, '#' + col, 2.6, 3.0, 2.6, true);
   }
@@ -221,7 +222,8 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
   for (const [x, z] of D.lamps as number[][]) if (!kits || !inShowcase(x, z)) lamp(b, x, z, 1.4);
   for (const [x, z, ry] of D.benches as number[][]) if (!kits || !inShowcase(x, z)) bench(b, x, z, ry);
   let fountainR = 3.2;
-  if (kits) { const sc = buildShowcase(D, kits, !lowEnd); root.add(sc.group); colliders.push(...sc.colliders); fountainR = sc.fountainR; }
+  const sc = kits ? buildShowcase(D, kits, !lowEnd) : null;
+  if (sc) { root.add(sc.group); colliders.push(...sc.colliders); fountainR = sc.fountainR; }
 
   // su
   const seaTex = waterTex();
@@ -246,11 +248,12 @@ export function buildIstanbul(mats: Record<string, THREE.Material>, lowEnd: bool
     root, colliders, laundry, sea: seaTex, boat,
     bounds: { x0: bx, x1: bx + bw, z0: bz, z1: bz + bh },
     lands: (D.lands as number[][]).concat([D.bridge, D.pier]).map(([x0, x1, z0, z1]) => ({ x0, x1, z0, z1 })),
-    spawn: new THREE.Vector3(start[0], 0, start[1]),
-    spawnYaw: start[2],
+    spawn: sc ? sc.spawn : new THREE.Vector3(start[0], 0, start[1]),
+    spawnYaw: sc ? sc.spawnYaw : start[2],
+    walkers: sc?.walkers, pigeons: sc?.pigeons,
     fountain: fountains[0], fountains, fountainR,
-    strays: (D.animals as any[][]).filter(a => (a[6] ?? 0) < 0.5).map(strayLook),
-    npcs: (D.vendors as number[][]).map(([x, z, ry]): NpcSpawn => ({ x, z, rot: ry, shirt: '#f4efe6', hat: 'kasket', role: 'Simitçi' })),
+    strays: (D.animals as any[][]).filter(a => (a[6] ?? 0) < 0.5).map(strayLook).concat(sc?.strays ?? []),
+    npcs: (D.vendors as number[][]).map(([x, z, ry]): NpcSpawn => ({ x, z, rot: ry, shirt: '#f4efe6', hat: 'kasket', role: 'Simitçi' })).concat(sc?.npcs ?? []),
     open: (D.roads as any[][]).map(([, x0, x1, z0, z1]) => rect([x0, x1, z0, z1])),
     lots,
     water: (D.water as number[][]).map(rect),

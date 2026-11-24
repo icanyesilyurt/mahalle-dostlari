@@ -10,7 +10,7 @@ export interface KitAsset { geo: THREE.BufferGeometry; mat: THREE.Material | THR
 export interface Kits {
   get(name: string): KitAsset;
   has(name: string): boolean;
-  tex: { arnavut: [THREE.Texture, THREE.Texture]; kaldirim: [THREE.Texture, THREE.Texture]; tas: [THREE.Texture, THREE.Texture]; kiremit: [THREE.Texture, THREE.Texture] };
+  tex: Record<'yol' | 'meydan' | 'plaka' | 'kiremit', [THREE.Texture, THREE.Texture]>;
 }
 
 /** Kenney atlasındaki krem duvar kareleri (u>=.875, v>=.75) örnek-başı renkle boyanır; geri kalan (pencere, kapı, çerçeve) olduğu gibi. */
@@ -51,9 +51,9 @@ export async function loadKits(base = './assets/'): Promise<Kits> {
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t;
   });
   const pair = (n: string) => Promise.all([loadTex(n + '_c', true), loadTex(n + '_n', false)]) as Promise<[THREE.Texture, THREE.Texture]>;
-  const [mb, ft, nk, arnavut, kaldirim, tas, kiremit] = await Promise.all([
+  const [mb, ft, nk, yol, meydan, plaka, kiremit] = await Promise.all([
     loader.loadAsync(base + 'mb.glb'), loader.loadAsync(base + 'ft.glb'), loader.loadAsync(base + 'nk.glb'),
-    pair('arnavut'), pair('kaldirim'), pair('tas'), pair('kiremit'),
+    pair('yol_s'), pair('meydan_s'), pair('plaka_s'), pair('kiremit'),
   ]);
   const map = new Map<string, KitAsset>();
   const take = (gltf: { scene: THREE.Group }, shared: THREE.Material | null) => {
@@ -87,7 +87,7 @@ export async function loadKits(base = './assets/'): Promise<Kits> {
   return {
     get: (n: string) => { const a = map.get(n); if (!a) throw new Error('asset yok: ' + n); return a; },
     has: (n: string) => map.has(n),
-    tex: { arnavut, kaldirim, tas, kiremit },
+    tex: { yol, meydan, plaka, kiremit },
   };
 }
 

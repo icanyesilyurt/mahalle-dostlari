@@ -13,7 +13,7 @@ OUT = sys.argv[sys.argv.index('--') + 1] if '--' in sys.argv else 'istanbul-piec
 SW = {
     'yesil': (16, 320), 'yesil_k': (48, 376), 'sari': (80, 320), 'turuncu': (144, 320), 'kirmizi': (208, 320),
     'mavi': (272, 320), 'mavi_k': (304, 376), 'acik_mavi': (336, 320), 'mor': (400, 320),
-    'koyu': (16, 448), 'gri': (80, 448), 'mavi_gri': (144, 448), 'mavi_gri_k': (176, 480), 'beyaz': (208, 448), 'beyaz_g': (240, 470),
+    'koyu': (16, 448), 'gri': (80, 448), 'mavi_gri': (144, 448), 'mavi_gri_k': (176, 480), 'beyaz': (208, 448), 'beyaz_g': (240, 470), 'krem_k2': (496, 470),
     'kiremit': (272, 448), 'kiremit_k': (304, 490), 'kahve': (336, 448), 'kahve_k': (368, 490),
     'ten': (400, 448), 'ten_k': (432, 480), 'krem': (464, 448), 'krem_k': (496, 490),
 }
@@ -263,99 +263,202 @@ def cay_masa():
 
 assets.append(cay_masa())
 
-# ---------- MİNARE (tek): 40 m gövde + iki şerefe + kurşun külah (toplam ~47 m) ----------
-def minare_parts(x=0, y=0):
+# ---------- MİNARE: ince, beyaz taş gövde, şerefe balkonları (korkuluklu), sivri kurşun külah ----------
+def quarter_dome(sw, r, x, y, z, dx, dy, sz=1.0, seg=24, rings=8):
+    """Yarım kubbe (çeyrek küre): (dx,dy) yönüne açılan dış kabuk; düz yüzü merkeze bakar."""
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=seg, ring_count=rings * 2, radius=r, location=(x, y, z))
+    o = bpy.context.object
+    bm = bmesh.new(); bm.from_mesh(o.data)
+    kill = [v for v in bm.verts if v.co.z < -1e-4 or (v.co.x * dx + v.co.y * dy) < -1e-4]
+    bmesh.ops.delete(bm, geom=kill, context='VERTS')
+    bm.to_mesh(o.data); bm.free()
+    o.scale = (1, 1, sz)
+    return _done(o, sw)
+
+def minare_parts(x=0, y=0, H=44.0, serefe=3, r=0.72):
     p = []
-    p.append(cyl('krem', 1.35, 3.0, x, y, 0, n=8))                     # kaide
-    p.append(cyl('krem', 0.95, 37.0, x, y, 3.0, n=16))                 # gövde
-    for zz in (22.0, 31.0, 37.5):                                     # şerefeler
-        p.append(cyl('ten', 1.55, 0.35, x, y, zz, n=16))
-        p.append(cyl('krem', 1.5, 0.5, x, y, zz - 0.5, n=16, r2=1.0))
-        p.append(cyl('beyaz', 1.5, 0.6, x, y, zz + 0.35, n=16))
-    p.append(cyl('krem', 0.8, 2.5, x, y, 38.4, n=16))
-    p.append(cyl('mavi_gri', 0.95, 7.0, x, y, 40.9, n=16, r2=0.02))      # külah
-    p.append(cyl('sari', 0.06, 1.4, x, y, 47.6, n=6)); p.append(ball('sari', 0.18, x, y, 48.4, seg=8))
+    p.append(cyl('beyaz_g', 1.25, 2.6, x, y, 0, n=12))                    # kaide
+    p.append(cyl('beyaz', 1.0, 1.0, x, y, 2.6, n=16, r2=r))                # geçiş
+    p.append(cyl('beyaz', r, H - 3.6, x, y, 3.6, n=16))                     # gövde
+    top = H
+    levels = [H * 0.55, H * 0.72, H * 0.88][3 - serefe:]
+    for zz in levels:
+        p.append(cyl('beyaz_g', r + 0.05, 0.7, x, y, zz - 0.7, n=16, r2=r + 0.6))  # mukarnas çıkma
+        p.append(cyl('beyaz', r + 0.65, 0.18, x, y, zz, n=20))              # balkon tabanı
+        for i in range(16):                                                 # korkuluk dikmeleri
+            a = i / 16 * math.pi * 2
+            p.append(box('beyaz_g', 0.07, 0.07, 0.8, x + math.cos(a) * (r + 0.58), y + math.sin(a) * (r + 0.58), zz + 0.18))
+        p.append(torus('beyaz_g', r + 0.58, 0.05, x, y, zz + 1.0, maj=20, mn=4))
+    p.append(cyl('beyaz', r * 0.9, 1.6, x, y, top, n=16))                   # külah altı
+    p.append(cyl('gri', r * 1.05, 6.5, x, y, top + 1.6, n=16, r2=0.03))     # sivri kurşun külah
+    p.append(cyl('sari', 0.05, 1.3, x, y, top + 8.0, n=6)); p.append(ball('sari', 0.16, x, y, top + 8.7, seg=8))
     return p
 
 assets.append(join('minare', minare_parts()))
 
-# ---------- CAMİ (Sultan Ahmet ölçüsünde): 34.5 m kare gövde, merkez kubbe, 4 yarım kubbe, 4 minare ----------
+# ---------- SULTAN AHMET CAMİİ: kademeli kubbeler (merkez + 4 yarım + 8 eksedra + 4 köşe), 4 minare gövde köşesinde ----------
 def cami():
     p = []
     S = 34.5
-    p.append(box('mavi_gri', S + 2, S + 2, 0.8, 0, 0, 0))                 # taban
-    p.append(box('krem', S, S, 13.0, 0, 0, 0.8))                          # gövde
-    p.append(box('ten', S + 0.5, S + 0.5, 0.5, 0, 0, 13.3))               # saçak silmesi
-    # cephelerde iki sıra kemerli pencere + kapı
+    p.append(box('mavi_gri', S + 2, S + 2, 0.8, 0, 0, 0))
+    p.append(box('krem', S, S, 12.0, 0, 0, 0.8))                             # gövde (açık taş)
+    p.append(box('krem_k', S + 0.5, S + 0.5, 0.45, 0, 0, 12.6))              # saçak silmesi
+    # cephelerde kemerli pencere sıraları + ortada taç kapı
     for f, (dx, dy) in {'-y': (0, -1), '+y': (0, 1), '+x': (1, 0), '-x': (-1, 0)}.items():
-        for row, (z, h, w) in enumerate([(3.2, 3.0, 1.5), (8.4, 2.8, 1.3)]):
+        for z, h, w in ((2.6, 2.6, 1.3), (6.6, 2.4, 1.2), (10.0, 1.8, 0.9)):
             for i in range(-3, 4):
-                if row == 0 and i == 0: continue
+                if z < 3 and i == 0: continue
                 t = i * 4.3
                 p += arch_window('beyaz', 'mavi_k', w, h, dx * (S / 2 + 0.02) + (t if dx == 0 else 0), dy * (S / 2 + 0.02) + (t if dy == 0 else 0), z, face=f)
-        # ana kapı
-        p += arch_window('ten', 'kahve_k', 3.2, 6.0, dx * (S / 2 + 0.05), dy * (S / 2 + 0.05), 0.8, face=f, depth=0.4)
-    # köşe ağırlık kuleleri
+        p += arch_window('krem_k', 'kahve_k', 3.0, 6.2, dx * (S / 2 + 0.05), dy * (S / 2 + 0.05), 0.8, face=f, depth=0.5)
+    # 4 köşe kubbesi (en alt kademe)
     for sx in (-1, 1):
         for sy in (-1, 1):
-            p.append(cyl('krem', 1.6, 4.5, sx * 15.0, sy * 15.0, 13.8, n=8))
-            p.append(dome('mavi_gri', 1.7, sx * 15.0, sy * 15.0, 18.3, sz=1.0, seg=10, rings=4))
-            p.append(cyl('sari', 0.06, 1.2, sx * 15.0, sy * 15.0, 19.9, n=6))
-    # küçük köşe kubbeleri
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            p.append(cyl('krem', 4.0, 1.4, sx * 10.0, sy * 10.0, 13.8, n=12))
-            p.append(dome('mavi_gri', 4.1, sx * 10.0, sy * 10.0, 15.2, sz=0.75, seg=14, rings=5))
-    # dört yarım kubbe (dış yüzde tam kubbe, merkez kasnağa gömülü)
+            p.append(cyl('krem', 4.2, 1.6, sx * 11.8, sy * 11.8, 13.0, n=16))
+            p.append(dome('gri', 4.3, sx * 11.8, sy * 11.8, 14.6, sz=0.8, seg=18, rings=6))
+            p.append(cyl('sari', 0.06, 1.0, sx * 11.8, sy * 11.8, 18.0, n=6))
+    # 4 yarım kubbe + her birinin iki yanında eksedra yarım kubbecikleri (orta kademe)
     for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        p.append(cyl('krem', 7.2, 1.6, dx * 9.0, dy * 9.0, 13.8, n=20))
-        p.append(dome('mavi_gri', 7.3, dx * 9.0, dy * 9.0, 15.4, sz=0.72, seg=20, rings=6))
-    # merkez kasnak + pencere halkası + kubbe + alem
-    p.append(cyl('krem', 11.3, 4.2, 0, 0, 13.8, n=28))
-    for i in range(20):
-        a = i / 20 * math.pi * 2
-        bpy.ops.mesh.primitive_cube_add(size=1, location=(math.cos(a) * 11.32, math.sin(a) * 11.32, 15.9), rotation=(0, 0, a))
-        o = bpy.context.object; o.scale = (0.1, 0.8, 1.6); p.append(_done(o, 'mavi_k'))
-    p.append(cyl('ten', 11.6, 0.4, 0, 0, 18.0, n=28))
-    p.append(dome('mavi_gri', 11.5, 0, 0, 18.3, sz=0.78, seg=28, rings=8))
-    p.append(cyl('sari', 0.12, 3.0, 0, 0, 27.0, n=6))
-    p.append(ball('sari', 0.45, 0, 0, 29.2, seg=10)); p.append(ball('sari', 0.32, 0, 0, 30.0, seg=8))
-    # dört minare (köşelerde, gövdeden ayrı)
+        cx, cy = dx * 8.6, dy * 8.6
+        p.append(box('krem', 17.4 if dx == 0 else 6.0, 17.4 if dy == 0 else 6.0, 3.0, cx + dx * 3.0, cy + dy * 3.0, 13.0))
+        p.append(quarter_dome('gri', 8.6, cx, cy, 16.0, dx, dy, sz=0.95, seg=28, rings=9))
+        for s in (-1, 1):
+            ex, ey = cx + dx * 2.8 + (s * 5.6 if dx == 0 else 0), cy + dy * 2.8 + (s * 5.6 if dy == 0 else 0)
+            odx, ody = (dx, dy)
+            p.append(quarter_dome('gri', 3.3, ex, ey, 16.0, odx, ody, sz=0.95, seg=16, rings=6))
+        # yarım kubbe kasnağında pencere dizisi
+        for i in range(-3, 4):
+            px = cx + dx * 8.62 + (i * 2.2 if dx == 0 else 0)
+            py = cy + dy * 8.62 + (i * 2.2 if dy == 0 else 0)
+            if abs(i) <= 2:
+                p.append(box('mavi_k', 0.7 if dx == 0 else 0.1, 0.7 if dy == 0 else 0.1, 1.4, px, py, 14.0))
+    # merkez kare kaide + 4 ağırlık kulesi (sekizgen, küçük kubbeli)
+    p.append(box('krem', 23.0, 23.0, 4.0, 0, 0, 13.0))
     for sx in (-1, 1):
         for sy in (-1, 1):
-            p += minare_parts(sx * 19.5, sy * 19.5)
+            p.append(cyl('krem', 1.9, 9.5, sx * 11.0, sy * 11.0, 13.0, n=8))
+            p.append(cyl('krem_k', 2.1, 0.4, sx * 11.0, sy * 11.0, 22.5, n=8))
+            p.append(dome('gri', 1.9, sx * 11.0, sy * 11.0, 22.9, sz=1.1, seg=12, rings=4))
+            p.append(cyl('sari', 0.06, 1.3, sx * 11.0, sy * 11.0, 24.9, n=6))
+    # merkez kasnak (pencere halkası) + büyük kubbe + alem
+    p.append(cyl('krem', 11.4, 4.6, 0, 0, 17.0, n=32))
+    for i in range(28):
+        a = i / 28 * math.pi * 2
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(math.cos(a) * 11.42, math.sin(a) * 11.42, 19.2), rotation=(0, 0, a))
+        o = bpy.context.object; o.scale = (0.1, 0.75, 1.9); p.append(_done(o, 'mavi_k'))
+    for i in range(28):  # payandalar
+        a = (i + 0.5) / 28 * math.pi * 2
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(math.cos(a) * 11.6, math.sin(a) * 11.6, 19.3), rotation=(0, 0, a))
+        o = bpy.context.object; o.scale = (0.8, 0.45, 4.6); p.append(_done(o, 'krem'))
+    p.append(cyl('krem_k', 11.8, 0.45, 0, 0, 21.6, n=32))
+    p.append(dome('gri', 11.6, 0, 0, 22.0, sz=0.82, seg=32, rings=10))
+    p.append(cyl('sari', 0.12, 2.6, 0, 0, 31.4, n=6))
+    p.append(ball('sari', 0.42, 0, 0, 33.4, seg=10)); p.append(ball('sari', 0.3, 0, 0, 34.2, seg=8))
+    # 4 minare (gövde köşelerinde; 3 şerefeli)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            p += minare_parts(sx * 19.5, sy * 19.5, H=44.0, serefe=3)
     return join('cami', p)
 
 assets.append(cami())
 
-# ---------- CAMİ AVLUSU: 26 x 34 m duvar, revak kubbecikleri, -x tarafında taç kapı (gövdenin -x yanına bitişir) ----------
+# ---------- CAMİ AVLUSU: revaklı avlu (kubbecikler), taç kapı, şadırvan + avlunun dış köşelerinde 2 minare (toplam 6) ----------
 def avlu():
     p = []
     L, Wd, H = 26.0, 34.0, 4.6
     for sy in (-1, 1):
         p.append(box('krem', L, 2.6, H, 0, sy * (Wd / 2 - 1.3), 0))
         for i in range(6):
-            p.append(dome('mavi_gri', 1.2, -L / 2 + 2.2 + i * 4.3, sy * (Wd / 2 - 1.3), H, sz=0.8, seg=10, rings=4))
-        for i in range(6):
+            p.append(dome('gri', 1.25, -L / 2 + 2.2 + i * 4.3, sy * (Wd / 2 - 1.3), H, sz=0.85, seg=12, rings=4))
             p += arch_window('beyaz', 'mavi_k', 1.1, 2.0, -L / 2 + 2.2 + i * 4.3, sy * (Wd / 2 + 0.02), 1.3, face='+y' if sy > 0 else '-y')
     p.append(box('krem', 2.6, Wd, H, -L / 2 + 1.3, 0, 0))
     for i in range(-3, 4):
         if i == 0: continue
-        p.append(dome('mavi_gri', 1.2, -L / 2 + 1.3, i * 4.6, H, sz=0.8, seg=10, rings=4))
-    # taç kapı
-    p.append(box('krem', 4.4, 6.0, 7.5, -L / 2 + 1.3, 0, 0))
-    p += arch_window('ten', 'kahve_k', 2.4, 4.6, -L / 2 - 0.95, 0, 0.0, face='-x', depth=0.35)
-    p.append(dome('mavi_gri', 2.0, -L / 2 + 1.3, 0, 7.5, sz=0.9, seg=12, rings=4))
-    # avlu ortasında şadırvan
+        p.append(dome('gri', 1.25, -L / 2 + 1.3, i * 4.6, H, sz=0.85, seg=12, rings=4))
+    p.append(box('krem', 4.6, 6.4, 8.0, -L / 2 + 1.3, 0, 0))                 # taç kapı
+    p += arch_window('krem_k', 'kahve_k', 2.4, 4.8, -L / 2 - 1.05, 0, 0.0, face='-x', depth=0.4)
+    p.append(dome('gri', 2.2, -L / 2 + 1.3, 0, 8.0, sz=0.95, seg=14, rings=5))
+    # avlu içi revak sütunları
+    for sy in (-1, 1):
+        for i in range(6):
+            p.append(cyl('beyaz', 0.25, H - 0.4, -L / 2 + 2.2 + i * 4.3, sy * (Wd / 2 - 3.2), 0, n=8))
+    # şadırvan
     p.append(cyl('krem', 2.4, 1.0, 1.0, 0, 0, n=8))
-    p.append(cyl('mavi_gri', 0.15, 2.6, 1.0 + 1.9, 0, 0, n=6))
-    p.append(pyramid('mavi_gri', 6.0, 6.0, 1.2, 1.0, 0, 3.0))
     for sx in (-1, 1):
         for sy in (-1, 1):
-            p.append(cyl('krem', 0.18, 3.0, 1.0 + sx * 2.6, sy * 2.6, 0, n=8))
+            p.append(cyl('beyaz', 0.18, 3.0, 1.0 + sx * 2.6, sy * 2.6, 0, n=8))
+    p.append(pyramid('gri', 6.4, 6.4, 1.2, 1.0, 0, 3.0))
+    p.append(dome('gri', 1.0, 1.0, 0, 4.1, seg=10, rings=4))
+    # avlunun dış köşelerinde 2 minare (2 şerefeli)
+    for sy in (-1, 1):
+        p += minare_parts(-L / 2 + 0.9, sy * (Wd / 2 - 0.9), H=36.0, serefe=2)
     return join('cami_avlu', p)
 
 assets.append(avlu())
+
+# ---------- AYASOFYA: kırmızımsı gövde, basık büyük kubbe (40 pencereli kasnak), doğu-batı yarım kubbeler, payandalar, 4 minare ----------
+def ayasofya():
+    p = []
+    L, W = 37.0, 31.0                                  # x boyunca uzun; giriş -x
+    p.append(box('mavi_gri', L + 3, W + 3, 0.6, 0, 0, 0))
+    p.append(box('krem', L, W, 11.0, 0, 0, 0.6))
+    p.append(box('krem_k', L + 0.4, W + 0.4, 0.4, 0, 0, 11.6))
+    # yan cephe pencereleri
+    for sy in (-1, 1):
+        for i in range(-4, 5):
+            p += arch_window('beyaz', 'mavi_k', 1.2, 2.4, i * 3.9, sy * (W / 2 + 0.02), 2.4, face='+y' if sy > 0 else '-y')
+            p += arch_window('beyaz', 'mavi_k', 1.0, 2.0, i * 3.9, sy * (W / 2 + 0.02), 7.2, face='+y' if sy > 0 else '-y')
+    for sx in (-1, 1):
+        for i in range(-3, 4):
+            p += arch_window('beyaz', 'mavi_k', 1.2, 2.4, sx * (L / 2 + 0.02), i * 3.9, 6.0, face='+x' if sx > 0 else '-x')
+    p += arch_window('krem_k', 'kahve_k', 3.2, 5.4, -L / 2 - 0.05, 0, 0.6, face='-x', depth=0.5)
+    # dev payandalar (kuzey-güney)
+    for sx in (-9.0, 9.0):
+        for sy in (-1, 1):
+            p.append(box('krem', 4.0, 6.0, 16.0, sx, sy * (W / 2 + 1.6), 0))
+            p.append(pyramid('krem_k', 4.2, 6.2, 1.4, sx, sy * (W / 2 + 1.6), 16.0))
+    # kare kaide + kasnak + basık kubbe
+    p.append(box('krem', 24.0, 24.0, 5.0, 0, 0, 12.0))
+    p.append(cyl('krem', 12.4, 2.6, 0, 0, 17.0, n=40))
+    for i in range(40):
+        a = i / 40 * math.pi * 2
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(math.cos(a) * 12.42, math.sin(a) * 12.42, 18.2), rotation=(0, 0, a))
+        o = bpy.context.object; o.scale = (0.1, 0.55, 1.3); p.append(_done(o, 'mavi_k'))
+        a2 = (i + 0.5) / 40 * math.pi * 2
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(math.cos(a2) * 12.6, math.sin(a2) * 12.6, 18.3), rotation=(0, 0, a2))
+        o = bpy.context.object; o.scale = (0.6, 0.35, 2.6); p.append(_done(o, 'krem'))
+    p.append(dome('gri', 12.5, 0, 0, 19.6, sz=0.55, seg=40, rings=10))
+    p.append(cyl('sari', 0.1, 1.8, 0, 0, 26.4, n=6)); p.append(ball('sari', 0.3, 0, 0, 28.3, seg=8))
+    # doğu ve batı yarım kubbeler + eksedralar (kademeli)
+    for dx in (1, -1):
+        p.append(box('krem', 8.0, 22.0, 4.0, dx * 14.0, 0, 11.6))
+        p.append(quarter_dome('gri', 11.0, dx * 12.0, 0, 15.2, dx, 0, sz=0.6, seg=32, rings=9))
+        for s in (-1, 1):
+            p.append(quarter_dome('gri', 4.2, dx * 15.5, s * 7.0, 12.0, dx, 0, sz=0.75, seg=16, rings=6))
+    # 4 minare (Ayasofya'nınkiler; 1 şerefeli)
+    for sx, sy in ((-21, -18), (-21, 18), (21, -18), (21, 18)):
+        p += minare_parts(sx, sy, H=32.0, serefe=1, r=0.8)
+    return join('ayasofya', p)
+
+assets.append(ayasofya())
+
+# ---------- GÜVERCİN (0.3 m): gri gövde, koyu baş; oyunda gagalar ve yaklaşınca uçar ----------
+def guvercin():
+    p = []
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=5, radius=0.1, location=(0, 0, 0.14))
+    o = bpy.context.object; o.scale = (0.9, 1.5, 0.85); p.append(_done(o, 'mavi_gri'))
+    p.append(ball('gri', 0.06, 0, -0.15, 0.24, seg=7))
+    bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=0.02, radius2=0.0, depth=0.05, location=(0, -0.21, 0.235), rotation=(math.pi / 2, 0, 0))
+    p.append(_done(bpy.context.object, 'turuncu'))
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0.17, 0.16), rotation=(-0.3, 0, 0))
+    o = bpy.context.object; o.scale = (0.1, 0.14, 0.02); p.append(_done(o, 'gri'))
+    for s in (-1, 1):
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(s * 0.085, 0.02, 0.17), rotation=(0, s * 0.2, 0))
+        o = bpy.context.object; o.scale = (0.03, 0.2, 0.08); p.append(_done(o, 'gri'))
+        p.append(box('kiremit', 0.015, 0.015, 0.07, s * 0.035, 0.0, 0))
+    return join('guvercin', p)
+
+assets.append(guvercin())
 
 # ---------- GALATA KULESİ: taş gövde (r 4.6, 40 m), revak katı, şerefe, konik kurşun külah ----------
 def galata():

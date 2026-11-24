@@ -5,15 +5,16 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Instancer, Kits, wallTint } from './assets';
 import { M, rng } from './kit';
-import type { Rect } from './world';
+import type { NpcSpawn, Rect, StraySpawn } from './world';
 
 /** Vitrin bölgesi (dünya koordinatı). */
-export const SHOWCASE = { x0: -60, x1: 190, z0: 138, z1: 300 };
+export const SHOWCASE = { x0: -60, x1: 190, z0: 128, z1: 300 };
 export const inShowcase = (x: number, z: number) => x >= SHOWCASE.x0 && x <= SHOWCASE.x1 && z >= SHOWCASE.z0 && z <= SHOWCASE.z1;
 /** Sultan Ahmet Camii + avlusu ve meydan çeşmesinin eski ilkel şekilleri bu kutulardan atılır. */
 export const REPLACED_PRIMS = [
   { x0: -47, x1: 22, z0: 232, z1: 279 },   // cami + avlu + 4 minare
   { x0: 33, x1: 51, z0: 213, z1: 231 },    // meydan çeşmesi
+  { x0: 62, x1: 114, z0: 160, z1: 212 },   // Ayasofya + 4 minare
 ];
 export const primReplaced = (x: number, z: number) => REPLACED_PRIMS.some(b => x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1);
 
@@ -83,7 +84,13 @@ const BOX = new THREE.BoxGeometry(1, 1, 1);
 const sbox = (mg: Merge, base: THREE.Matrix4, c: THREE.ColorRepresentation, w: number, h: number, d: number, x: number, y: number, z: number, rx = 0) =>
   mg.add(BOX, c, new THREE.Matrix4().multiplyMatrices(base, M(x, y + h / 2, z, 0, w, h, d, rx)));
 
-export interface ShowcaseOut { group: THREE.Group; colliders: Rect[]; fountainR: number }
+export interface ShowcaseOut {
+  group: THREE.Group; colliders: Rect[]; fountainR: number;
+  spawn: THREE.Vector3; spawnYaw: number;
+  strays: StraySpawn[]; npcs: NpcSpawn[];
+  walkers: [number, number][][];      // gezinen NPC'lerin dönüş yolları
+  pigeons: [number, number][];        // güvercin yerleri
+}
 
 export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut {
   const R = rng(4242);
@@ -94,7 +101,7 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
 
   // ---------- evler ----------
   const houses = (D.houses as House[]).filter(h => inShowcase(h[0], h[1]));
-  for (const h of houses) {
+  const house = (h: House) => {
     const [cx, cz, w, d, ry, floors, shopN, kind, colH] = h;
     const wood = kind === 'ahsap', brick = kind === 'tugla', shop = shopN === 1;
     const col = '#' + colH;
@@ -146,13 +153,32 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
     // pencere önünde çiçek (balkonlu katlarda)
     if (balcony) for (let f = 1; f < floors; f++) if (R.chance(0.6))
       I.add(R.pick(['flower_redA', 'flower_yellowA', 'plant_bush']), at(base, M(-w / 2 + mw * (balI + 0.5) + R.range(-0.6, 0.6), gf + (f - 1) * fh + 0.1, -d / 2 - 0.12, R.range(0, 6), 2.4, 2.4, 2.4)));
+  };
+  for (const h of houses) house(h);
+
+  // ---------- bitişik cephe blokları (eski 'walls'): 6-9 m'lik ayrı evlere bölünür, çoğu dükkânlı ve tenteli ----------
+  const PAL = ['e6a98c', 'f3e3b5', 'a9c1b4', 'd9c2a7', 'e9b9a3', 'c8d8bf', 'bcd0e3', 'f1d59c', 'e8c4cb'];
+  for (const [ww, hh, dd, x, , z, , ry] of D.walls as any[][]) {
+    if (!inShowcase(x, z)) continue;
+    const n = Math.max(1, Math.round(ww / 7.4)), sw = ww / n, fl = Math.max(2, Math.round((hh - 0.4) / 3));
+    const c = Math.cos(ry), s = Math.sin(ry);
+    for (let i = 0; i < n; i++) {
+      const lx = -ww / 2 + sw * (i + 0.5);
+      house([x + lx * c, z - lx * s, sw - 0.05, dd, ry + Math.PI, fl + (R.chance(0.35) ? 1 : 0), R.chance(0.65) ? 1 : 0, 'siva', R.pick(PAL), 'win_a']);
+    }
   }
 
   // ---------- ağaç, fener, bank ----------
+  const deco = new Merge();
+  const grassAt = (x: number, z: number) => (D.grounds as any[][]).some(g => g[5] === 'grass' && x > g[0] && x < g[1] && z > g[2] && z < g[3]);
+  // çınar (iri), ıhlamur (orta), süs ağacı (küçük, yuvarlak), selvi (ince-uzun)
+  const TREES: [string, number, number][] = [['tree_oak', 6.6, 6.6], ['tree_default', 4.4, 4.2], ['tree_fat', 3.2, 3.0], ['tree-high-round', 2.4, 2.9]];
   for (const [x, z, kind, s] of D.trees as [number, number, string, number][]) {
     if (!inShowcase(x, z)) continue;
-    if (kind === 'cypress') I.add('tree-high-round', M(x, 0, z, R.range(0, 6), 3.2 * s, 3.4 * s, 3.2 * s));
-    else I.add(R.chance(0.6) ? 'tree_oak' : 'tree_default', M(x, 0, z, R.range(0, 6), 6.5 * s, 6.2 * s, 6.5 * s));
+    const k = R.int(0, 9), v = R.range(0.8, 1.15) * s;
+    const [n, sh, sv] = kind === 'cypress' ? TREES[3] : k < 4 ? TREES[0] : k < 6 ? TREES[1] : k < 8 ? TREES[2] : TREES[3];
+    I.add(n, M(x, 0, z, R.range(0, 6), sh * v, sv * v, sh * v));
+    if (!grassAt(x, z)) treeRing(deco, x, z);
   }
   for (const [x, z] of D.lamps as number[][]) if (inShowcase(x, z)) I.add('lantern', M(x, 0, z, 0, 2.5, 2.5, 2.5));
   for (const [x, z, ry] of D.benches as number[][]) if (inShowcase(x, z)) I.add('bench', at(M(x, 0, z, ry), M(-0.8, 0, 0.25, 0, 4, 2, 2.5)));
@@ -161,6 +187,7 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   const stone = wallTint('#efe6d6');
   I.add('cami', M(-2, 0, 255), stone);
   I.add('cami_avlu', M(-32.25, 0, 255), stone);
+  I.add('ayasofya', M(88, 0, 186), wallTint('#d6a690'));
 
   // ---------- meydan çeşmesi (eski havuzun yerinde) ----------
   const [fx, fz] = D.fountains[0] as number[];
@@ -181,12 +208,49 @@ export function buildShowcase(D: any, kits: Kits, shadows: boolean): ShowcaseOut
   for (const [x, z] of [[104.5, 218.5], [104.5, 225.5], [100, 222]]) { I.add('cay_masa', M(x, 0, z, R.range(0, 6))); colliders.push({ x, z, hw: 0.45, hd: 0.45 }); }
 
   const g = new THREE.Group();
-  g.add(I.build(shadows));
   g.add(trims.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), shadows));
   const [kc, kn] = kits.tex.kiremit;
   g.add(roofs.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, map: kc, normalMap: kn, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.8 }), shadows));
   g.add(curbs(D));
-  return { group: g, colliders, fountainR: 4.6 };
+
+  // ---------- meydan düzeni: yürüme yolları, çeşme çevresi, çimen adacıkları ----------
+  const ground = squareLayout(D, kits, deco, R, I);
+  g.add(ground);
+
+  // ---------- açılış sokağı (Sahil Sokağı): iki yanı evli/dükkânlı, simitçi, çay ocağı, kedi-köpek ----------
+  const npcs: NpcSpawn[] = [];
+  I.add('simit_arabasi', M(111, 0, 140.4, 0, 0.8, 0.8, 0.8)); colliders.push({ x: 111, z: 140.4, hw: 0.75, hd: 0.5 });
+  npcs.push({ x: 111.2, z: 141.5, rot: 0.3, shirt: '#f4efe6', hat: 'kasket', role: 'Simitçi' });
+  I.add('cay_ocagi', M(100, 0, 139.3, 0)); colliders.push({ x: 100, z: 139.3, hw: 1.3, hd: 1.0 });
+  npcs.push({ x: 98.2, z: 140.5, rot: 0.4, shirt: '#ffffff', hat: null, role: 'Çaycı' });
+  for (const [x, z] of [[98.6, 143.3], [102.4, 143.3]]) { I.add('cay_masa', M(x, 0, z, R.range(0, 6))); colliders.push({ x, z, hw: 0.45, hd: 0.45 }); }
+  npcs.push({ x: 99.2, z: 144.0, rot: Math.PI, shirt: '#6b8fbf', hat: 'kasket', role: 'Müşteri', sit: true });
+  npcs.push({ x: 102.9, z: 142.6, rot: -0.3, shirt: '#8e3b5a', hat: null, role: 'Müşteri', sit: true });
+  I.add('pot_large', M(114.5, 0, 139.9, 0, 2, 2, 2)); I.add('flower_redA', M(114.5, 0.25, 139.9, 0, 3, 3, 3));
+  I.add('pottedPlant', M(95.6, 0, 139.8, 0, 2.4, 2.4, 2.4));
+  const strays: StraySpawn[] = [
+    { id: 'v_tarcin', name: 'Tarçın', x: 114.5, z: 143.4, breed: '', look: { species: 'cat', body: '#e38a3a', belly: '#f6e3cf', mark: '#b5622a', pattern: 'tabby', size: 0.95 } },
+    { id: 'v_karabas', name: 'Karabaş', x: 106.5, z: 142.9, breed: '', look: { species: 'dog', body: '#c9a273', belly: '#efe2cc', pattern: 'solid', size: 1.1, floppy: true } },
+    { id: 'v_duman', name: 'Duman', x: 103.6, z: 140.9, breed: '', look: { species: 'cat', body: '#7d8590', belly: '#d9dde2', pattern: 'solid', size: 0.9 } },
+  ];
+
+  // ---------- gezinenler ve güvercinler ----------
+  const [fcx, fcz] = D.fountains[0] as number[];
+  const circle = (cx: number, cz: number, r: number, n: number, a0 = 0): [number, number][] => Array.from({ length: n }, (_, i) => [cx + Math.cos(a0 + i / n * 6.283) * r, cz + Math.sin(a0 + i / n * 6.283) * r]);
+  const walkers: [number, number][][] = [
+    circle(fcx, fcz, 11, 10),
+    circle(fcx, fcz, 12.5, 10, 2.5).reverse(),
+    [[56, 221.2], [112, 221.2], [112, 223], [56, 223]],
+    [[41.2, 170], [41.2, 208], [43, 208], [43, 170]],
+    [[60, 141.6], [118, 141.6], [118, 142.6], [60, 142.6]],
+    [[-15, 223], [30, 223], [30, 221.4], [-15, 221.4]],
+  ];
+  const pigeons: [number, number][] = [];
+  for (let i = 0; i < 16; i++) { const a = R.range(0, 6.28), r = R.range(5.2, 9); pigeons.push([fcx + Math.cos(a) * r, fcz + Math.sin(a) * r]); }
+  for (let i = 0; i < 6; i++) pigeons.push([R.range(104, 116), R.range(141.2, 143.8)]);
+
+  g.add(I.build(shadows));
+  return { group: g, colliders, fountainR: 4.6, spawn: new THREE.Vector3(120, 0, 142.2), spawnYaw: -Math.PI / 2, strays, npcs, walkers, pigeons };
 }
 
 /** Kaldırım kenar taşı: kaldırım/meydan döşemesinin yola (arnavut kaldırımı) değdiği kenarlarda. */
@@ -212,4 +276,79 @@ function curbs(D: any): THREE.Mesh {
   }
   const m = mg.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), false);
   return m;
+}
+
+// ---------- zemin süsleri ----------
+const CURB = '#fbf3e6', SOIL = '#8c6a4c', GRASS = '#9ccc6e';
+
+/** Ağaç dibi çemberi: alçak taş halka + toprak. */
+function treeRing(mg: Merge, x: number, z: number, r = 1.15) {
+  const ring = new THREE.Shape(); ring.absarc(0, 0, r, 0, Math.PI * 2, false);
+  const hole = new THREE.Path(); hole.absarc(0, 0, r - 0.22, 0, Math.PI * 2, true); ring.holes.push(hole);
+  const g = new THREE.ExtrudeGeometry(ring, { depth: 0.14, bevelEnabled: false, curveSegments: 18 });
+  mg.add(g, CURB, new THREE.Matrix4().makeTranslation(x, 0, z).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)));
+  mg.add(new THREE.CircleGeometry(r - 0.2, 18), SOIL, new THREE.Matrix4().makeTranslation(x, 0.07, z).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)));
+}
+
+function roundRect(w: number, d: number, r: number): THREE.Shape {
+  const s = new THREE.Shape(), x = -w / 2, y = -d / 2;
+  s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r); s.lineTo(x + w, y + d - r);
+  s.quadraticCurveTo(x + w, y + d, x + w - r, y + d); s.lineTo(x + r, y + d); s.quadraticCurveTo(x, y + d, x, y + d - r);
+  s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s;
+}
+
+/** Meydanı böler: kesme taş yürüme yolları (kenar çizgili), çeşme çevresinde halka, kenar taşlı çimen adacıkları. */
+function squareLayout(D: any, kits: Kits, deco: Merge, R: ReturnType<typeof rng>, I: Instancer): THREE.Group {
+  const g = new THREE.Group();
+  const [fx, fz] = D.fountains[0] as number[];
+  const [pc, pn] = kits.tex.plaka;
+  const pathMat = new THREE.MeshStandardMaterial({ map: pc, normalMap: pn, normalScale: new THREE.Vector2(0.4, 0.4), roughness: 0.95, color: '#e8c9a2', polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -24 });
+  const paths: THREE.BufferGeometry[] = [];
+  const strip = (x0: number, z0: number, x1: number, z1: number) => {
+    const w = x1 - x0, d = z1 - z0, geo = new THREE.PlaneGeometry(w, d);
+    geo.rotateX(-Math.PI / 2); geo.translate((x0 + x1) / 2, 0.05, (z0 + z1) / 2);
+    const p = geo.attributes.position as THREE.BufferAttribute, uv = geo.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) uv.setXY(i, (w > d ? p.getX(i) : p.getZ(i)) / 5, (w > d ? p.getZ(i) : p.getX(i)) / 5);
+    paths.push(geo);
+    // iki yanda gömme kenar taşı çizgisi
+    if (w > d) { for (const zz of [z0, z1]) deco.add(BOX, CURB, M((x0 + x1) / 2, 0.07, zz, 0, w, 0.04, 0.3)); }
+    else { for (const xx of [x0, x1]) deco.add(BOX, CURB, M(xx, 0.07, (z0 + z1) / 2, 0, 0.3, 0.04, d)); }
+  };
+  strip(fx + 9.6, fz - 2, 119, fz + 2);       // doğu (çay ocağına)
+  strip(-17, fz - 2, fx - 9.6, fz + 2);       // batı (cami avlusuna)
+  strip(fx - 2, 166, fx + 2, fz - 9.6);       // kuzey (Ayasofya yönü)
+  strip(fx - 2, fz + 9.6, fx + 2, 279);       // güney
+  // çeşme çevresinde halka yol
+  const ring = new THREE.RingGeometry(4.0, 9.6, 48, 1); ring.rotateX(-Math.PI / 2); ring.translate(fx, 0.05, fz);
+  const rp = ring.attributes.position as THREE.BufferAttribute, ruv = ring.attributes.uv as THREE.BufferAttribute;
+  for (let i = 0; i < rp.count; i++) ruv.setXY(i, rp.getX(i) / 5, rp.getZ(i) / 5);
+  paths.push(ring);
+  for (const r of [4.0, 9.6]) { const t = new THREE.TorusGeometry(r, 0.15, 3, 64); t.rotateX(Math.PI / 2); deco.add(t, CURB, M(fx, 0.03, fz)); }
+  const pm = new THREE.Mesh(mergeGeometries(paths)!, pathMat); pm.receiveShadow = true; g.add(pm);
+
+  // çimen adacıkları (engel, yol, bank, fener üstüne gelmeyecek şekilde)
+  const cols = (D.col as number[][]), pts = ([] as number[][]).concat(D.lamps, D.benches);
+  const free = (x: number, z: number, w: number, d: number) =>
+    !cols.some(c => x + w / 2 + 1 > c[0] && x - w / 2 - 1 < c[1] && z + d / 2 + 1 > c[2] && z - d / 2 - 1 < c[3]) &&
+    !pts.some(p => Math.abs(p[0] - x) < w / 2 + 1 && Math.abs(p[1] - z) < d / 2 + 1) &&
+    !(D.grounds as any[][]).some(gg => gg[5] === 'grass' && x + w / 2 > gg[0] && x - w / 2 < gg[1] && z + d / 2 > gg[2] && z - d / 2 < gg[3]) &&
+    Math.abs(z - fz) > d / 2 + 2.5 && Math.abs(x - fx) > w / 2 + 2.5 && Math.hypot(x - fx, z - fz) > 12;
+  const grassMat = new THREE.MeshStandardMaterial({ color: GRASS, roughness: 1 });
+  const cands: [number, number, number, number][] = [[75, 212, 13, 5], [95, 212, 9, 5], [10, 213, 14, 6], [10, 231, 14, 5], [70, 230, 10, 5], [100, 230, 10, 5], [26, 196, 10, 6], [60, 196, 8, 6], [-8, 196, 12, 6]];
+  for (const [x, z, w, d] of cands) {
+    if (!free(x, z, w, d)) continue;
+    const sh = roundRect(w, d, 1.2);
+    const top = new THREE.ShapeGeometry(sh, 6); top.rotateX(-Math.PI / 2);
+    const m = new THREE.Mesh(top, grassMat); m.position.set(x, 0.12, z); m.receiveShadow = true; g.add(m);
+    const border = roundRect(w + 0.5, d + 0.5, 1.45); border.holes.push(roundRect(w, d, 1.2) as unknown as THREE.Path);
+    const bg = new THREE.ExtrudeGeometry(border, { depth: 0.16, bevelEnabled: false, curveSegments: 6 });
+    deco.add(bg, CURB, new THREE.Matrix4().makeTranslation(x, 0, z).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)));
+    for (let k = 0, n = Math.round(w * d / 9); k < n; k++)
+      I.add(R.pick(['flower_redA', 'flower_yellowA', 'flower_purpleA', 'plant_bush', 'plant_bushDetailed']), M(x + R.range(-w / 2 + 0.8, w / 2 - 0.8), 0.12, z + R.range(-d / 2 + 0.8, d / 2 - 0.8), R.range(0, 6), 3, 3, 3));
+    if (w >= 12) I.add('tree_fat', M(x, 0.12, z, R.range(0, 6), 2.8, 2.6, 2.8));
+  }
+  const dm = deco.mesh(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }), false);
+  dm.material.polygonOffset = true; (dm.material as THREE.Material).polygonOffsetFactor = -8; (dm.material as THREE.Material).polygonOffsetUnits = -30;
+  g.add(dm);
+  return g;
 }

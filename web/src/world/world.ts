@@ -29,6 +29,8 @@ export interface WorldData {
   fountain: THREE.Vector3;
   fountains: THREE.Vector3[];
   fountainR?: number;
+  walkers?: [number, number][][];
+  pigeons?: [number, number][];
   water: Rect[];
   parks: Rect[];
   landmarks: { name: string; x: number; z: number }[];

@@ -4,7 +4,7 @@ import sharp from 'sharp'; import fs from 'fs'; import path from 'path'; import 
 const here = path.dirname(url.fileURLToPath(import.meta.url));
 const SRC = path.resolve(here, '../../asset-src/tex'), OUT = path.resolve(here, '../public/assets/tex');
 fs.mkdirSync(OUT, { recursive: true });
-const SET = { arnavut: 'PavingStones119', kaldirim: 'PavingStones151', tas: 'PavingStones128', kiremit: 'RoofingTiles013A' };
+const SET = { kiremit: 'RoofingTiles013A' };
 for (const [name, id] of Object.entries(SET)) {
   for (const [suf, map] of [['c', 'Color'], ['n', 'NormalGL'], ['r', 'Roughness']]) {
     const f = `${SRC}/${id}/${id}_1K-JPG_${map}.jpg`;

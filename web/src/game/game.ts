@@ -59,6 +59,8 @@ export class Game {
   nearFountain = false;
   private houseObjs = new Map<string, THREE.Object3D>();
   private npcs: Human[] = [];
+  private walkers: { h: Human; path: THREE.Vector3[]; i: number; sp: number }[] = [];
+  private pigeons: { im: THREE.InstancedMesh; b: { home: THREE.Vector3; p: THREE.Vector3; v: THREE.Vector3; yaw: number; air: number; t: number }[] } | null = null;
   private balls: Ball[] = [];
   private tapTarget: THREE.Vector3 | null = null;
   private tapStray: Stray | null = null;
@@ -165,6 +167,24 @@ export class Game {
       const h = new Human({ outfit: 'tisort_mercan', hat: n.hat, skin: '#e0b090', hair: '#3a3030', pants: '#4a4a4a', shirt: n.shirt });
       h.root.position.set(n.x, 0, n.z); h.root.rotation.y = n.rot; h.sitting = !!n.sit;
       this.scene.add(h.root); this.npcs.push(h);
+    }
+    // gezinen NPC'ler (yalnız yeni görünümde)
+    const SH = ['#e2493b', '#3b6aa8', '#2f7d6d', '#e2a33b', '#8e3b5a', '#f4efe6', '#6b8fbf'];
+    (this.world.walkers ?? []).forEach((pts, k) => {
+      const h = new Human({ outfit: 'tisort_mercan', hat: k % 3 === 0 ? 'kasket' : null, skin: k % 2 ? '#e0b090' : '#c98d62', hair: k % 2 ? '#3a3030' : '#6b4a32', pants: k % 2 ? '#4a4a4a' : '#5a6a8a', shirt: SH[k % SH.length] } as any);
+      const path = pts.map(([x, z]) => new THREE.Vector3(x, 0, z));
+      h.root.position.copy(path[0]); this.scene.add(h.root);
+      this.walkers.push({ h, path, i: 1, sp: 1.1 + (k % 3) * 0.15 });
+    });
+    // güvercinler
+    const kits = getKits();
+    if (kits && this.world.pigeons?.length) {
+      const a = kits.get('guvercin');
+      const im = new THREE.InstancedMesh(a.geo, a.mat, this.world.pigeons.length);
+      im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
+      for (let i = 0; i < im.count; i++) im.setColorAt(i, new THREE.Color('#ffffff'));
+      this.scene.add(im);
+      this.pigeons = { im, b: this.world.pigeons.map(([x, z]) => ({ home: new THREE.Vector3(x, 0, z), p: new THREE.Vector3(x, 0, z), v: new THREE.Vector3(), yaw: Math.random() * 6.28, air: 0, t: Math.random() * 3 })) };
     }
     // sokak hayvanları
     const R = rng(99);
@@ -366,6 +386,49 @@ export class Game {
     loop();
   }
 
+  private updateWalkers(dt: number) {
+    for (const w of this.walkers) {
+      const r = w.h.root, tgt = w.path[w.i];
+      const far = r.position.distanceTo(this.pos) > 120;
+      r.visible = !far;
+      const d = tgt.clone().sub(r.position); d.y = 0;
+      const L = d.length();
+      if (L < 0.3) { w.i = (w.i + 1) % w.path.length; continue; }
+      // oyuncuya çarpmamak için yavaşla
+      const near = r.position.distanceTo(this.pos) < 1.2;
+      const sp = near ? 0 : w.sp;
+      r.position.addScaledVector(d.normalize(), Math.min(L, sp * dt));
+      const yaw = Math.atan2(d.x, d.z); let dy = yaw - r.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      r.rotation.y += dy * Math.min(1, dt * 6);
+      w.h.speed = sp;
+      if (!far) w.h.update(dt);
+    }
+  }
+
+  private updatePigeons(dt: number, t: number) {
+    const P = this.pigeons; if (!P) return;
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1);
+    P.b.forEach((b, i) => {
+      if (b.air > 0) {
+        b.air -= dt; b.p.addScaledVector(b.v, dt); b.v.y -= dt * 0.6;
+        if (b.air <= 0) { b.p.copy(b.home).add(new THREE.Vector3((Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3)); b.v.set(0, 0, 0); }
+        e.set(0, b.yaw, Math.sin(t * 30 + i) * 0.25, 'YXZ');
+      } else {
+        b.t -= dt;
+        if (b.t < 0) { b.t = 0.6 + Math.random() * 2.2; b.yaw += (Math.random() - 0.5) * 2; b.p.x += Math.sin(b.yaw) * -0.15; b.p.z += Math.cos(b.yaw) * -0.15; }
+        const peck = Math.max(0, Math.sin(t * 7 + i * 1.7)) * 0.5;
+        e.set(peck, b.yaw, 0, 'YXZ');
+        if (b.p.distanceTo(this.pos) < 2.6) {   // yaklaşınca havalanır
+          const away = b.p.clone().sub(this.pos).setY(0).normalize();
+          b.v.copy(away.multiplyScalar(4 + Math.random() * 2)).setY(3.5 + Math.random() * 1.5);
+          b.yaw = Math.atan2(-b.v.x, -b.v.z); b.air = 2.5 + Math.random() * 2;
+        }
+      }
+      m.compose(b.p, q.setFromEuler(e), one); P.im.setMatrixAt(i, m);
+    });
+    P.im.instanceMatrix.needsUpdate = true;
+  }
+
   draw() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
 
   private update(dt: number) {
@@ -419,6 +482,8 @@ export class Game {
     this.player.root.rotation.y += ry * Math.min(1, dt * 14);
     this.player.update(dt);
     for (const n of this.npcs) n.update(dt);
+    this.updateWalkers(dt);
+    this.updatePigeons(dt, t);
     for (const n of this.npcs) n.root.visible = n.root.position.distanceTo(this.pos) < 110;
     if (Math.random() < dt * 0.05) { const n = this.npcs.find(n => n.root.visible && !n.busy); n?.act('wave', 1.6); }
 
