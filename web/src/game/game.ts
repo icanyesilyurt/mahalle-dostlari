@@ -13,6 +13,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { setMultiDraw } from '../world/assets';
 import { NIGHT, dayState, hourNow, skyMaterial } from './daycycle';
+import { VEHICLE_DEFS, Vehicle } from './vehicles';
 import { CITY_BUILDERS, WorldData, blocked, collide, getKits, makeMaterials, onLand } from '../world/world';
 import { haptic, sfx } from '../ui/sfx';
 import { Input } from './input';
@@ -69,6 +70,11 @@ export class Game {
   nearFountain = false;
   private houseObjs = new Map<string, THREE.Object3D>();
   private npcs: Human[] = [];
+  // araç
+  vehicle: Vehicle | null = null;
+  riding = false;
+  nearVehicle = false;
+  private carried: Companion[] = [];
   private walkers: { h: Human; path: THREE.Vector3[]; i: number; sp: number }[] = [];
   private pigeons: { im: THREE.InstancedMesh; b: { home: THREE.Vector3; p: THREE.Vector3; v: THREE.Vector3; yaw: number; air: number; t: number }[] } | null = null;
   private balls: Ball[] = [];
@@ -215,6 +221,7 @@ export class Game {
       if (R.chance(0.2)) { st.mode = 'sleep'; st.t = R.range(8, 20); pet.sleeping = true; pet.setPose('lie'); }
       this.strays.push(st);
     }
+    this.spawnVehicle();
     // kurulu kulübeler
     for (const h of this.state.houses.filter(h => h.city === id)) this.addHouseObj(h.uid);
     this.spawnPets();
@@ -294,6 +301,7 @@ export class Game {
   }
 
   feed(): void {
+    if (this.riding) { this.ev.toast('Önce araçtan in'); return; }
     const s = this.near;
     if (this.player.busy) return;
     if (!s) {
@@ -318,6 +326,7 @@ export class Game {
   }
 
   water(): void {
+    if (this.riding) { this.ev.toast('Önce araçtan in'); return; }
     if (this.player.busy) return;
     if (this.nearFountain) {
       refillWater(this.state); sfx.pour(); haptic(10);
@@ -339,6 +348,7 @@ export class Game {
   }
 
   pet(): void {
+    if (this.riding) { this.ev.toast('Önce araçtan in'); return; }
     if (this.player.busy) return;
     const s = this.near, c = this.nearCompanion;
     const target = s?.pet ?? c?.pet;
@@ -361,6 +371,7 @@ export class Game {
   canThrow() { return !!this.companion && Object.keys(this.state.items).some(k => itemById(k)?.kind === 'ball' && this.state.items[k] > 0) && this.balls.length === 0; }
 
   throwBall(): void {
+    if (this.riding) { this.ev.toast('Önce araçtan in'); return; }
     const c = this.companion; if (!c || this.player.busy || this.balls.length) return;
     const ballId = Object.keys(this.state.items).filter(k => itemById(k)?.kind === 'ball' && this.state.items[k] > 0).pop();
     if (!ballId) { this.ev.toast('Mağazadan bir top al'); return; }
@@ -398,6 +409,80 @@ export class Game {
       this.draw();
     };
     loop();
+  }
+
+  // ---------- araçlar ----------
+  /** Etkin aracı oyuncunun yanına park eder (yoksa/değiştiyse yeniden kurar). */
+  spawnVehicle() {
+    const kits = getKits(); const g = this.state.garage;
+    if (this.riding) this.toggleRide();
+    if (this.vehicle) { this.scene.remove(this.vehicle.root); this.vehicle = null; }
+    if (!kits || !(this.state.items[g.active] > 0) || !VEHICLE_DEFS[g.active]) return;
+    const def = VEHICLE_DEFS[g.active];
+    const v = new Vehicle(def, kits, g.color[def.id] ?? def.defColor, g.acc[def.id] ?? []);
+    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    let spot = this.pos.clone().addScaledVector(right, 1.6 + def.radius);
+    for (const k of [1, -1, 2, -2]) { const c = this.pos.clone().addScaledVector(right, k * (1.6 + def.radius)); if (!blocked(c.x, c.z, def.radius, this.world.colliders) && onLand(c.x, c.z, this.world.lands)) { spot = c; break; } }
+    v.root.position.copy(spot); v.yaw = this.yaw; v.root.rotation.y = this.yaw;
+    this.scene.add(v.root); this.vehicle = v;
+  }
+
+  setVehicleLook() { const v = this.vehicle; if (!v) return; const g = this.state.garage; v.setColor(g.color[v.def.id] ?? v.def.defColor); v.setAcc(g.acc[v.def.id] ?? []); }
+
+  /** Bin / in. Binerken yanındaki dost kapasite izin verirse sepete/sandığa/kasaya atlar. */
+  toggleRide() {
+    const v = this.vehicle; if (!v) return;
+    if (this.riding) {
+      this.riding = false;
+      const side = new THREE.Vector3(Math.cos(v.yaw), 0, -Math.sin(v.yaw)).multiplyScalar(-(v.def.radius + 0.6));
+      const p = v.root.position.clone().add(side);
+      if (blocked(p.x, p.z, 0.35, this.world.colliders) || !onLand(p.x, p.z, this.world.lands)) p.copy(v.root.position).sub(side);
+      this.pos.copy(p); v.speed = 0;
+      this.scene.add(this.player.root); this.player.root.visible = true; this.player.sitting = false;
+      this.player.root.position.copy(this.pos); this.player.root.rotation.set(0, v.yaw, 0);
+      for (const c of this.carried) { this.scene.add(c.pet.root); c.pet.root.position.copy(this.pos).add(new THREE.Vector3(0.6, 0, 0.6)); c.pet.root.rotation.set(0, 0, 0); c.mode = 'follow'; c.pet.setPose('stand'); }
+      this.carried = [];
+      sfx.tap();
+    } else {
+      if (!this.nearVehicle) return;
+      this.riding = true;
+      this.pos.copy(v.root.position); this.yaw = v.yaw;
+      if (v.def.seat) { v.root.add(this.player.root); this.player.root.position.set(...v.def.seat); this.player.root.rotation.set(0, 0, 0); this.player.sitting = true; }
+      else { this.player.root.visible = false; }
+      const c = this.companion;
+      if (c && v.def.cap > 0 && (!v.def.smallOnly || c.pet.height < 0.5)) {
+        v.root.add(c.pet.root); c.pet.root.position.set(...v.def.slots[0]); c.pet.root.rotation.set(0, 0, 0); (c as any).mode = 'ride'; this.carried.push(c);
+      } else if (c && v.def.smallOnly) this.ev.toast(`${this.petName(c)} bisiklet sepetine sığmıyor, arkandan koşacak`);
+      sfx.tap();
+    }
+    this.ev.nearChanged();
+  }
+
+  /** Araç sürüşü: joystick yönüne dönerek hızlanır; binalardan geçmez (orta + ön + arka çarpışma noktaları). */
+  private drive(dt: number, wish: THREE.Vector3, mag: number) {
+    const v = this.vehicle!, d = v.def;
+    let turnRate = 0, dy = 0;
+    if (mag > 0.05) {
+      const ty = Math.atan2(wish.x, wish.z); dy = ty - v.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      const turn = THREE.MathUtils.clamp(dy, -d.turn * dt, d.turn * dt) * (v.speed > 0.4 ? 1 : 0.7);
+      v.yaw += turn; turnRate = turn / dt;
+    }
+    const target = mag * d.speed * (Math.abs(dy) > 1.6 ? 0.25 : 1);
+    v.speed += (target - v.speed) * Math.min(1, dt * (target > v.speed ? 1.5 : 3.5));
+    const fwd = new THREE.Vector3(Math.sin(v.yaw), 0, Math.cos(v.yaw));
+    const before = this.pos.clone();
+    this.pos.addScaledVector(fwd, v.speed * dt);
+    collide(this.pos, Math.min(d.radius, 0.9), this.world.colliders, this.world.bounds, this.world.lands, before);
+    if (d.cap === 3) for (const k of [1.55, -1.75]) { // pikabın önü/arkası da duvara girmesin
+      const pt = this.pos.clone().addScaledVector(fwd, k), pb = pt.clone();
+      collide(pt, 0.85, this.world.colliders, this.world.bounds, this.world.lands, before.clone().addScaledVector(fwd, k));
+      this.pos.add(pt.sub(pb));
+    }
+    for (const o of this.houseObjs.values()) this.pushOut(this.pos, o.position, 0.9 + d.radius * 0.5);
+    const real = this.pos.distanceTo(before) / dt;
+    if (real < v.speed * 0.6) v.speed = real;
+    v.root.position.copy(this.pos); v.root.rotation.y = v.yaw; v.animate(dt, turnRate);
+    this.yaw = v.yaw; this.player.speed = 0;
   }
 
   /** Gün döngüsü: gerçek saate göre gökyüzü, güneş/ay, ışıklar; gece fenerler ve pencereler yanar. */
@@ -511,7 +596,8 @@ export class Game {
     }
     const busy = this.player.busy;
     const speed = busy ? 0 : mag * (this.input.running ? 5.2 : 4.0);
-    if (speed > 0) {
+    if (this.riding && this.vehicle) this.drive(dt, wish, mag);
+    else if (speed > 0) {
       const targetYaw = Math.atan2(wish.x, wish.z);
       let dy = targetYaw - this.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       this.yaw += dy * Math.min(1, dt * 12);
@@ -522,9 +608,11 @@ export class Game {
       const moved = this.pos.distanceTo(before) / dt;
       this.player.speed += (moved - this.player.speed) * Math.min(1, dt * 10);
     } else this.player.speed += (0 - this.player.speed) * Math.min(1, dt * 10);
-    this.player.root.position.copy(this.pos);
-    let ry = this.yaw - this.player.root.rotation.y; ry = Math.atan2(Math.sin(ry), Math.cos(ry));
-    this.player.root.rotation.y += ry * Math.min(1, dt * 14);
+    if (!this.riding) {
+      this.player.root.position.copy(this.pos);
+      let ry = this.yaw - this.player.root.rotation.y; ry = Math.atan2(Math.sin(ry), Math.cos(ry));
+      this.player.root.rotation.y += ry * Math.min(1, dt * 14);
+    }
     this.player.update(dt);
     for (const n of this.npcs) n.update(dt);
     this.updateWalkers(dt);
@@ -549,7 +637,7 @@ export class Game {
     this.findNear();
 
     // kamera: omuz üstü, karşıya bakan. Yürürken yumuşakça arkaya geçer; elle döndürünce bir süre bekler.
-    if (this.player.speed > 0.6 && this.manualT <= 0) {
+    if ((this.riding && this.vehicle ? this.vehicle.speed : this.player.speed) > 0.6 && this.manualT <= 0) {
       let dy = this.yaw - this.camYaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       this.camYaw += dy * Math.min(1, dt * 2.4);
     }
@@ -568,7 +656,7 @@ export class Game {
     const vy = this.camYaw + this.side;
     const fwd = new THREE.Vector3(Math.sin(vy), 0, Math.cos(vy));
     // yay kolu: araya bina girerse kamera karaktere yaklaşır, duvardan geçmez
-    const want = this.camDist;
+    const want = this.camDist + (this.riding && this.vehicle ? this.vehicle.def.camExtra : 0);
     const free = this.armFree(pivot, fwd.clone().negate(), want + 0.4) - 0.4;
     const armT = Math.max(1.0, Math.min(want, free));
     this.armDist += (armT - this.armDist) * Math.min(1, dt * (armT < this.armDist ? 18 : 3));
@@ -649,7 +737,9 @@ export class Game {
     let bc: Companion | null = null;
     if (!best) for (const c of [this.companion, ...this.homePets]) if (c) { const d = c.pet.root.position.distanceTo(this.pos); if (d < 2.4 && d < bd) { bd = d; bc = c; } }
     const nf = this.world.fountains.some(f => f.distanceTo(this.pos) < (this.world.fountainR ?? 3.2));
-    const changed = best !== this.near || bc !== this.nearCompanion || nf !== this.nearFountain;
+    const nv = !this.riding && !!this.vehicle && this.vehicle.root.position.distanceTo(this.pos) < this.vehicle.def.radius + 1.8;
+    const changed = best !== this.near || bc !== this.nearCompanion || nf !== this.nearFountain || nv !== this.nearVehicle;
+    this.nearVehicle = nv;
     this.near = best; this.nearCompanion = bc; this.nearFountain = nf;
     const target = best?.pet ?? bc?.pet;
     this.ring.visible = !!target;
@@ -777,6 +867,7 @@ export class Game {
     const all = [this.companion, ...this.homePets].filter(Boolean) as Companion[];
     for (const c of all) {
       const p = c.pet; c.t -= dt; p.lookYaw = 0;
+      if ((c.mode as string) === 'ride') { p.speed = 0; p.setPose('sit'); p.wag = 0.8; continue; }
       if (c.mode === 'home' && c.home) {
         if (c.t < 0) { c.t = 6 + Math.random() * 8; (c as any).target = this.pickWander(c.home, 2.5); p.sleeping = Math.random() < 0.4; p.setPose(p.sleeping ? 'lie' : 'stand'); }
         const tg = (c as any).target as THREE.Vector3 | undefined;

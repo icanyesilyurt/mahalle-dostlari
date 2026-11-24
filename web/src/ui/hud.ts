@@ -25,13 +25,16 @@ export function itemIcon(it: Item): string {
     case 'petwear': return I.vest(it.color);
     case 'ball': return I.ballC(it.color, it.color2);
     case 'house': return I.houseC(it.color);
+    case 'vehicle': return `<span class="emo">${({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[it.id] ?? '🚗'}</span>`;
+    case 'paint': return `<span class="swatch big" style="background:${it.color}"></span>`;
+    case 'vacc': return `<span class="emo">${({ aks_bayrak: '🚩', aks_cicek: '🌸', aks_zil: '🔔' } as Record<string, string>)[it.id] ?? '✨'}</span>`;
   }
 }
 
 export class Hud {
   private game!: Game;
   private sheetOpen: string | null = null;
-  private tab: Record<string, string> = { shop: 'house', pets: 'mine', home: 'wardrobe', map: 'hood' };
+  private tab: Record<string, string> = { shop: 'vehicle', pets: 'mine', home: 'wardrobe', map: 'hood' };
   private ads: AdProvider;
 
   constructor() {
@@ -50,6 +53,7 @@ export class Hud {
     $('#btnWater').onclick = () => game.water();
     $('#btnPet').onclick = () => game.pet();
     $('#btnBall').onclick = () => game.throwBall();
+    $('#btnRide').onclick = () => game.toggleRide();
     $('#foodPill').onclick = () => this.foodModal();
     $('#coinPlus').onclick = () => this.open('shop', 'box');
     $('#gemPlus').onclick = () => this.open('shop', 'gem');
@@ -96,7 +100,10 @@ export class Hud {
     $('#btnWater').classList.toggle('glow', (thirsty && g.state.water > 0) || g.nearFountain);
     $('#btnWater').querySelector('.lbl')!.textContent = g.nearFountain ? 'Doldur' : 'Su';
     $('#btnPet').classList.toggle('show', !!s || !!g.nearCompanion);
-    $('#btnBall').classList.toggle('show', g.canThrow() && !s);
+    $('#btnBall').classList.toggle('show', g.canThrow() && !s && !g.riding);
+    const rb = $('#btnRide'); rb.classList.toggle('show', g.nearVehicle || g.riding);
+    rb.querySelector('.lbl')!.textContent = g.riding ? 'İn' : 'Bin';
+    rb.querySelector('.rideico')!.textContent = ({ bisiklet: '🚲', scooter: '🛵', pikap: '🛻' } as Record<string, string>)[g.state.garage.active] ?? '🚲';
   }
 
   // ---------- bildirimler ----------
@@ -193,9 +200,20 @@ export class Hud {
       }
     } else if (id === 'shop') {
       title.innerHTML = `${I.shop}<span>Mağaza</span>`;
-      html = this.tabs('shop', [['house', 'Yuvalar'], ['outfit', 'Kıyafet'], ['hat', 'Şapka'], ['petwear', 'Pet Giyim'], ['ball', 'Toplar'], ['box', 'Sürpriz'], ['gem', 'Elmas']]);
+      html = this.tabs('shop', [['vehicle', 'Araçlar'], ['house', 'Yuvalar'], ['outfit', 'Kıyafet'], ['hat', 'Şapka'], ['petwear', 'Pet Giyim'], ['ball', 'Toplar'], ['box', 'Sürpriz'], ['gem', 'Elmas']]);
       const t = this.tab.shop;
-      if (t === 'box') {
+      if (t === 'vehicle') {
+        const G = s.garage, act = G.active;
+        const owned = (k: ItemKind) => ITEMS.filter(i => i.kind === k && (s.items[i.id] ?? 0) > 0);
+        html += `<div class="card"><b>Garaj</b><small>Etkin araç haritada yanına park edilir. Yakınındayken <b>Bin</b> butonu çıkar.</small><div class="gear">${owned('vehicle').map(i => `<button class="btn ${act === i.id ? '' : 'ghost'}" data-veh="${i.id}">${itemIcon(i)} ${i.name}</button>`).join('')}</div>
+          <b>Renk</b><div class="gear">${owned('paint').map(i => `<button class="swatch ${(G.color[act] ?? '') === i.color ? 'on' : ''}" style="background:${i.color}" data-paint="${i.color}" title="${i.name}"></button>`).join('') || '<small>Aşağıdan boya al</small>'}</div>
+          <b>Aksesuar</b><div class="gear">${owned('vacc').map(i => `<button class="btn sm ${(G.acc[act] ?? []).includes(i.id) ? '' : 'ghost'}" data-vacc="${i.id}">${itemIcon(i)} ${i.name}</button>`).join('') || '<small>Aşağıdan aksesuar al</small>'}</div></div>`;
+        html += `<div class="grid">${ITEMS.filter(i => ['vehicle', 'paint', 'vacc'].includes(i.kind) && !priceFree(i.price)).map(i => {
+          const own = s.items[i.id] ?? 0;
+          const btn = own ? `<span class="chip ok">Sende var</span>` : `<button class="btn" data-buy="${i.id}" ${canAfford(s, i.price) ? '' : 'disabled'}>${priceHtml(i.price)}</button>`;
+          return `<div class="card shopitem" ${i.rarity ? `style="--rc:${RARITY_COLOR[i.rarity]}"` : ''}>${i.rarity ? `<span class="rar">${RARITY_LABEL[i.rarity]}</span>` : ''}<div class="ico">${itemIcon(i)}</div><b>${i.name}</b>${i.desc ? `<small>${i.desc}</small>` : ''}${btn}</div>`;
+        }).join('')}</div>`;
+      } else if (t === 'box') {
         html += `<div class="list">${BOXES.map(bx => `<div class="card box" style="--ac:${bx.color}"><div class="boxart">${I.gift}</div><div class="info"><b>${bx.name}</b><small>Oyun içi jetonla açılır. Sahip olduğun eşya çıkarsa jetona dönüşür.</small>
           <table class="odds">${bx.tiers.map(ti => `<tr><td><i style="background:${RARITY_COLOR[ti.rarity]}"></i>${RARITY_LABEL[ti.rarity]}</td><td>%${ti.chance}</td><td class="r">${ti.rewards.map(rw => this.rewardName(rw)).join(', ')}</td></tr>`).join('')}</table>
           <button class="btn big" data-box="${bx.id}" ${canAfford(s, bx.price) ? '' : 'disabled'}>Aç ${priceHtml(bx.price)}</button></div></div>`).join('')}</div>`;
@@ -249,6 +267,9 @@ export class Hud {
     const g = this.game, s = g.state;
     const on = (attr: string, fn: (v: string) => void) => root.querySelectorAll<HTMLElement>(`[data-${attr}]`).forEach(el => el.onclick = () => fn(el.dataset[attr.replace(/-./g, m => m[1].toUpperCase())]!));
     on('tab', v => { this.tab[this.sheetOpen!] = v; this.render(); });
+    on('veh', v => { s.garage.active = v; save(s); g.spawnVehicle(); this.render(); this.nearChanged(); });
+    on('paint', v => { s.garage.color[s.garage.active] = v; save(s); g.setVehicleLook(); this.render(); });
+    on('vacc', v => { const l = (s.garage.acc[s.garage.active] ??= []); const i = l.indexOf(v); if (i >= 0) l.splice(i, 1); else l.push(v); save(s); g.setVehicleLook(); this.render(); });
     on('buy', v => {
       if (buyItem(s, v)) {
         sfx.success(); save(s); this.sync();
@@ -256,6 +277,9 @@ export class Hud {
         if (it.kind === 'house') this.toast(`${it.name} envanterde. Ev → Yuvalarım'dan kurabilirsin`);
         else if (it.kind === 'outfit') { s.look.outfit = v; g.player.setLook(s.look); save(s); this.toast(`${it.name} giyildi`); }
         else if (it.kind === 'hat') { s.look.hat = v; g.player.setLook(s.look); save(s); this.toast(`${it.name} takıldı`); }
+        else if (it.kind === 'vehicle') { s.garage.active = v; save(s); g.spawnVehicle(); this.toast(`${it.name} yanına park edildi. Yaklaş ve Bin'e bas`); this.render(); }
+        else if (it.kind === 'paint') { s.garage.color[s.garage.active] = it.color; save(s); g.setVehicleLook(); this.toast(`${it.name} sürüldü`); this.render(); }
+        else if (it.kind === 'vacc') { (s.garage.acc[s.garage.active] ??= []).push(v); save(s); g.setVehicleLook(); this.toast(`${it.name} takıldı`); this.render(); }
         else if (it.kind === 'ball') { this.toast(`${it.name} alındı! Yanındaki dostunla "Top" butonuyla oyna`); this.nearChanged(); }
         else this.toast(`${it.name} alındı. Petlerim'den giydir`);
       } else { sfx.error(); this.toast('Yeterli bakiye yok'); }

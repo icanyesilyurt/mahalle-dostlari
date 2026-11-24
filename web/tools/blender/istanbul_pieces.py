@@ -643,6 +643,100 @@ def kopru():
 
 assets.append(kopru())
 
+# ---------- ARAÇLAR (ön = -Y Blender = glTF +Z). Boyalı yüzeyler 'krem' karesi: oyunda seçilen renge boyanır. ----------
+def teker(name, r, w):
+    p = [cyl('koyu', r, w, 0, 0, -w / 2, n=18, ry=math.pi / 2)]
+    p[0].location = (0, 0, 0)
+    p.append(cyl('gri', r * 0.55, w + 0.02, 0, 0, -(w + 0.02) / 2, n=12, ry=math.pi / 2))
+    for i in range(4):
+        bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0), rotation=(i * math.pi / 4, 0, 0))
+        o = bpy.context.object; o.scale = (w * 0.5, r * 1.6, 0.03); p.append(_done(o, 'beyaz_g'))
+    return join(name, p)
+
+assets.append(teker('teker_ince', 0.33, 0.05))
+assets.append(teker('teker_orta', 0.24, 0.1))
+assets.append(teker('teker_kalin', 0.36, 0.22))
+
+def bisiklet():
+    p = []
+    def bar(sw, a, b, r=0.025):
+        a, b = Vector(a), Vector(b); d = b - a
+        bpy.ops.mesh.primitive_cylinder_add(vertices=8, radius=r, depth=d.length, location=(a + b) / 2)
+        o = bpy.context.object; o.rotation_mode = 'QUATERNION'; o.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(d.normalized())
+        return _done(o, sw)
+    # kadro (boyalı)
+    fy, ry_ = -0.62, 0.62          # ön/arka teker merkezleri (y), yükseklik 0.33
+    p += [bar('krem', (0, ry_, 0.33), (0, 0.05, 0.75)), bar('krem', (0, ry_, 0.33), (0, -0.05, 0.36)), bar('krem', (0, -0.05, 0.36), (0, 0.05, 0.75)),
+          bar('krem', (0, 0.05, 0.75), (0, -0.48, 0.82)), bar('krem', (0, -0.05, 0.36), (0, -0.5, 0.82)), bar('krem', (0, -0.5, 0.82), (0, fy, 0.33))]
+    p.append(bar('gri', (0, 0.05, 0.75), (0, 0.12, 0.86), 0.02))
+    p.append(box('koyu', 0.16, 0.28, 0.06, 0, 0.14, 0.86))                     # sele
+    p.append(bar('gri', (0, -0.5, 0.82), (0, -0.46, 0.98), 0.02))
+    p.append(bar('koyu', (-0.28, -0.46, 0.98), (0.28, -0.46, 0.98), 0.018))    # gidon
+    for sx in (-1, 1): p.append(cyl('koyu', 0.026, 0.1, sx * 0.3, -0.46, 0.93, n=8, ry=math.pi / 2))
+    p.append(bar('gri', (0, 0.62, 0.33), (0, 0.62, 0.55), 0.02))                # arka çamurluk desteği
+    p.append(box('krem', 0.08, 0.5, 0.025, 0, 0.62, 0.66))                     # arka çamurluk
+    # ön sepet (hasır): hayvan burada taşınır
+    p.append(box('kahve', 0.42, 0.36, 0.03, 0, -0.78, 0.74))
+    for sx in (-1, 1): p.append(box('kahve', 0.03, 0.36, 0.24, sx * 0.205, -0.78, 0.74))
+    for sy in (-1, 1): p.append(box('kahve', 0.42, 0.03, 0.24, 0, -0.78 + sy * 0.165, 0.74))
+    for k in range(3): p.append(box('kahve_k', 0.43, 0.37, 0.02, 0, -0.78, 0.8 + k * 0.07))
+    p.append(cyl('beyaz', 0.05, 0.06, 0, -0.62, 0.86, n=10, rx=math.pi / 2))   # far
+    return join('bisiklet', p)
+
+assets.append(bisiklet())
+
+def scooter():
+    p = []
+    p.append(box('krem', 0.36, 1.1, 0.22, 0, 0.1, 0.28))                       # taban
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, radius=0.4, location=(0, 0.42, 0.55))
+    o = bpy.context.object; o.scale = (0.55, 1.05, 0.62); p.append(_done(o, 'krem'))   # arka gövde (Vespa)
+    p.append(box('koyu', 0.3, 0.56, 0.1, 0, 0.3, 0.78))                        # sele
+    p.append(box('krem', 0.4, 0.14, 0.75, 0, -0.5, 0.3))                       # ön kalkan
+    p.append(cyl('krem', 0.05, 0.55, 0, -0.56, 0.62, n=10))                    # direksiyon borusu
+    p.append(box('koyu', 0.62, 0.06, 0.05, 0, -0.56, 1.15))                    # gidon
+    p.append(cyl('beyaz', 0.08, 0.06, 0, -0.62, 1.05, n=12, rx=math.pi / 2))   # far
+    p.append(box('krem', 0.16, 0.42, 0.08, 0, -0.62, 0.42))                    # ön çamurluk
+    # arka hayvan sandığı
+    p.append(box('kahve', 0.44, 0.42, 0.03, 0, 0.82, 0.8))
+    for sx in (-1, 1): p.append(box('kahve', 0.03, 0.42, 0.26, sx * 0.215, 0.82, 0.8))
+    for sy in (-1, 1): p.append(box('kahve', 0.44, 0.03, 0.26, 0, 0.82 + sy * 0.2, 0.8))
+    p.append(box('kirmizi', 0.1, 0.03, 0.06, 0, 0.84, 0.55))                   # stop lambası
+    return join('scooter', p)
+
+assets.append(scooter())
+
+def pikap():
+    p = []
+    L, W = 4.2, 1.8
+    p.append(box('gri', W, L, 0.25, 0, 0, 0.35))                               # şasi
+    p.append(box('krem', W, 1.3, 0.6, 0, -1.45, 0.55))                         # kaput
+    p.append(box('krem', W, 1.4, 0.65, 0, -0.1, 0.55))                         # kabin alt
+    p.append(box('krem', W - 0.08, 1.25, 0.6, 0, -0.05, 1.2))                  # kabin üst
+    p.append(box('cam', W - 0.04, 0.05, 0.45, 0, -0.69, 1.25))                 # ön cam
+    for sx in (-1, 1): p.append(box('cam', 0.05, 0.8, 0.42, sx * (W / 2 - 0.03), -0.1, 1.27))
+    p.append(box('krem', W - 0.04, 1.3, 0.06, 0, -0.05, 1.8))                  # tavan
+    # kasa: taban + yan ve arka kapaklar
+    p.append(box('kahve_k', W - 0.1, 1.95, 0.06, 0, 1.6, 0.6))
+    for sx in (-1, 1): p.append(box('krem', 0.08, 2.0, 0.45, sx * (W / 2 - 0.04), 1.6, 0.6))
+    p.append(box('krem', W, 0.08, 0.45, 0, 2.58, 0.6))
+    # tampon, farlar, ızgara
+    p.append(box('gri', W + 0.06, 0.14, 0.18, 0, -2.12, 0.42)); p.append(box('gri', W + 0.06, 0.12, 0.16, 0, 2.64, 0.42))
+    for sx in (-1, 1):
+        p.append(cyl('beyaz', 0.12, 0.05, sx * 0.62, -2.11, 0.86, n=12, rx=math.pi / 2))
+        p.append(box('kirmizi', 0.16, 0.04, 0.12, sx * 0.7, 2.64, 0.82))
+    p.append(box('koyu', 0.8, 0.04, 0.22, 0, -2.11, 0.75))
+    # çamurluk kemerleri
+    for sy in (-1.35, 1.6):
+        for sx in (-1, 1): p.append(box('koyu', 0.06, 0.95, 0.3, sx * (W / 2 + 0.01), sy, 0.62))
+    return join('pikap', p)
+
+assets.append(pikap())
+
+# aksesuarlar
+assets.append(join('aks_bayrak', [cyl('gri', 0.012, 1.1, 0, 0, 0, n=6), pyramid('kirmizi', 0.02, 0.4, 0.3, 0, 0.2, 0.8)]))
+assets.append(join('aks_cicek', [box('kiremit_k', 0.36, 0.12, 0.12, 0, 0, 0)] + [ico(['kirmizi', 'sari', 'mor', 'beyaz', 'kirmizi'][i], 0.06, -0.14 + i * 0.07, 0, 0.16) for i in range(5)] + [ico('yesil', 0.05, -0.1 + i * 0.1, 0.02, 0.12) for i in range(3)]))
+assets.append(join('aks_zil', [cyl('sari', 0.045, 0.03, 0, 0, 0, n=12), ball('sari', 0.04, 0, 0, 0.035, seg=10)]))
+
 # ---------- dışa aktarım: her parça kendi düğümü, köken 0 ----------
 for o in assets:
     o.location = (0, 0, 0)

@@ -66,7 +66,7 @@ export const BREEDS: Breed[] = [
 export const breedById = (id: string) => BREEDS.find(b => b.id === id);
 
 // ---------- Mağaza ürünleri ----------
-export type ItemKind = 'house' | 'outfit' | 'hat' | 'petwear' | 'collar' | 'ball';
+export type ItemKind = 'house' | 'outfit' | 'hat' | 'petwear' | 'collar' | 'ball' | 'vehicle' | 'paint' | 'vacc';
 export interface Item { id: string; kind: ItemKind; name: string; price: Price; color: string; color2?: string; rarity?: Rarity; desc?: string }
 export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 
@@ -90,6 +90,19 @@ export const ITEMS: Item[] = [
   { id: 'tasma_mavi', kind: 'collar', name: 'Mavi Tasma', price: { coin: 100 }, color: '#3b8ed6', rarity: 'common' },
   { id: 'tasma_canli', kind: 'collar', name: 'Çıngıraklı Tasma', price: { coin: 250 }, color: '#d64545', color2: '#f2c94c', rarity: 'rare' },
   { id: 'tasma_altin', kind: 'collar', name: 'Altın Tasma', price: { gem: 6 }, color: '#e8b53a', rarity: 'epic' },
+  // Araçlar (bisiklet başlangıçta ücretsiz), boyalar ve aksesuarlar
+  { id: 'bisiklet', kind: 'vehicle', name: 'Bisiklet', price: { coin: 0 }, color: '#2f7d6d', desc: 'Sepetinde 1 küçük dost taşır' },
+  { id: 'scooter', kind: 'vehicle', name: 'Scooter', price: { coin: 2500 }, color: '#8fd0c8', rarity: 'rare', desc: 'Daha hızlı, arka sandıkta 1 dost' },
+  { id: 'pikap', kind: 'vehicle', name: 'Pikap', price: { coin: 9000 }, color: '#c8423a', rarity: 'epic', desc: 'En hızlısı, kasasında 3 dost' },
+  { id: 'boya_kirmizi', kind: 'paint', name: 'Kırmızı Boya', price: { coin: 150 }, color: '#c8423a' },
+  { id: 'boya_mavi', kind: 'paint', name: 'Boğaz Mavisi', price: { coin: 150 }, color: '#3b6aa8' },
+  { id: 'boya_yesil', kind: 'paint', name: 'Çam Yeşili', price: { coin: 150 }, color: '#2f7d6d' },
+  { id: 'boya_sari', kind: 'paint', name: 'Taksi Sarısı', price: { coin: 200 }, color: '#f2c230' },
+  { id: 'boya_krem', kind: 'paint', name: 'Krem', price: { coin: 200 }, color: '#f1e4c8' },
+  { id: 'boya_pembe', kind: 'paint', name: 'Şeker Pembe', price: { gem: 3 }, color: '#f29ab4', rarity: 'rare' },
+  { id: 'aks_bayrak', kind: 'vacc', name: 'Flama', price: { coin: 200 }, color: '#c8423a', desc: 'Arkada dalgalanan flama' },
+  { id: 'aks_cicek', kind: 'vacc', name: 'Çiçek Saksısı', price: { coin: 300 }, color: '#e2493b', desc: 'Renkli çiçekler' },
+  { id: 'aks_zil', kind: 'vacc', name: 'Altın Zil', price: { gem: 4 }, color: '#f2c230', rarity: 'epic', desc: 'Parıl parıl zil' },
   // Oyun topları
   { id: 'top_kirmizi', kind: 'ball', name: 'Kırmızı Top', price: { coin: 80 }, color: '#e2493b', rarity: 'common' },
   { id: 'top_tenis', kind: 'ball', name: 'Tenis Topu', price: { coin: 150 }, color: '#d8e84a', rarity: 'common' },

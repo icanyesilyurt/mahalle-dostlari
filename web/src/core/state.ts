@@ -33,14 +33,16 @@ export interface GameState {
   friends: Record<string, Friend>;   // sokak hayvanı id -> ilişki
   stats: { fed: number; watered: number; boxes: number; ads: number };
   muted: boolean;
+  garage: { active: string; color: Record<string, string>; acc: Record<string, string[]> };
 }
 
 export function newState(now: number): GameState {
   return {
     v: SAVE_VERSION, food: FOOD_MAX, foodTs: now, water: WATER_MAX, coins: 300, gems: 15,
-    city: 'istanbul', unlockedCities: ['istanbul'], items: { tisort_mercan: 1 }, houses: [], pets: [], activePet: null,
+    city: 'istanbul', unlockedCities: ['istanbul'], items: { tisort_mercan: 1, bisiklet: 1 }, houses: [], pets: [], activePet: null,
     look: { outfit: 'tisort_mercan', hat: null, skin: '#f1c7a5', hair: '#4a2f22', gender: 'm', hairStyle: 'dalgali' },
     friends: {}, stats: { fed: 0, watered: 0, boxes: 0, ads: 0 }, muted: false,
+    garage: { active: 'bisiklet', color: {}, acc: {} },
   };
 }
 
@@ -192,6 +194,8 @@ export function migrate(raw: any, now: number): GameState {
   if (!raw || typeof raw !== 'object') return base;
   const s = { ...base, ...raw, look: { ...base.look, ...(raw.look ?? {}) }, stats: { ...base.stats, ...(raw.stats ?? {}) } } as GameState;
   s.v = SAVE_VERSION;
+  s.garage = { ...base.garage, ...(raw.garage ?? {}) };
+  s.items = { ...(s.items ?? {}) }; if (!s.items.bisiklet) s.items.bisiklet = 1;   // bisiklet herkese ücretsiz
   // bilinmeyen ırk/ürün kalıntılarını temizle
   s.pets = (s.pets ?? []).filter(p => BREEDS.some(b => b.id === p.breed));
   s.items = Object.fromEntries(Object.entries(s.items ?? {}).filter(([k]) => ITEMS.some(i => i.id === k)));
